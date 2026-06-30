@@ -14,16 +14,236 @@ export type Database = {
   }
   public: {
     Tables: {
-      [_ in never]: never
+      applicants: {
+        Row: {
+          academic_average: number
+          address: string
+          age: number
+          application_number: string
+          application_status: string
+          applying_grade_id: string
+          created_at: string
+          current_grade: string
+          date_of_birth: string
+          email: string
+          first_name: string
+          gender: string
+          id: string
+          id_number: string
+          last_name: string
+          parent_email: string
+          parent_name: string
+          parent_phone: string
+          parent_relationship: string
+          phone: string
+          previous_school: string
+        }
+        Insert: {
+          academic_average: number
+          address: string
+          age: number
+          application_number: string
+          application_status?: string
+          applying_grade_id: string
+          created_at?: string
+          current_grade: string
+          date_of_birth: string
+          email: string
+          first_name: string
+          gender: string
+          id?: string
+          id_number: string
+          last_name: string
+          parent_email: string
+          parent_name: string
+          parent_phone: string
+          parent_relationship: string
+          phone: string
+          previous_school: string
+        }
+        Update: {
+          academic_average?: number
+          address?: string
+          age?: number
+          application_number?: string
+          application_status?: string
+          applying_grade_id?: string
+          created_at?: string
+          current_grade?: string
+          date_of_birth?: string
+          email?: string
+          first_name?: string
+          gender?: string
+          id?: string
+          id_number?: string
+          last_name?: string
+          parent_email?: string
+          parent_name?: string
+          parent_phone?: string
+          parent_relationship?: string
+          phone?: string
+          previous_school?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "applicants_applying_grade_id_fkey"
+            columns: ["applying_grade_id"]
+            isOneToOne: false
+            referencedRelation: "grades"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      appointments: {
+        Row: {
+          applicant_id: string
+          appointment_date: string
+          appointment_time: string
+          created_at: string
+          fee_paid: boolean
+          id: string
+          venue: string
+        }
+        Insert: {
+          applicant_id: string
+          appointment_date: string
+          appointment_time: string
+          created_at?: string
+          fee_paid?: boolean
+          id?: string
+          venue?: string
+        }
+        Update: {
+          applicant_id?: string
+          appointment_date?: string
+          appointment_time?: string
+          created_at?: string
+          fee_paid?: boolean
+          id?: string
+          venue?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "appointments_applicant_id_fkey"
+            columns: ["applicant_id"]
+            isOneToOne: false
+            referencedRelation: "applicants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      documents: {
+        Row: {
+          applicant_id: string
+          birth_certificate_path: string | null
+          created_at: string
+          id: string
+          id_copy_path: string
+          previous_results_path: string
+          proof_residence_path: string
+        }
+        Insert: {
+          applicant_id: string
+          birth_certificate_path?: string | null
+          created_at?: string
+          id?: string
+          id_copy_path: string
+          previous_results_path: string
+          proof_residence_path: string
+        }
+        Update: {
+          applicant_id?: string
+          birth_certificate_path?: string | null
+          created_at?: string
+          id?: string
+          id_copy_path?: string
+          previous_results_path?: string
+          proof_residence_path?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "documents_applicant_id_fkey"
+            columns: ["applicant_id"]
+            isOneToOne: false
+            referencedRelation: "applicants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      grades: {
+        Row: {
+          capacity: number
+          grade_number: number
+          id: string
+          name: string
+          occupied: number
+        }
+        Insert: {
+          capacity: number
+          grade_number: number
+          id?: string
+          name: string
+          occupied?: number
+        }
+        Update: {
+          capacity?: number
+          grade_number?: number
+          id?: string
+          name?: string
+          occupied?: number
+        }
+        Relationships: []
+      }
+      user_roles: {
+        Row: {
+          id: string
+          role: Database["public"]["Enums"]["app_role"]
+          user_id: string
+        }
+        Insert: {
+          id?: string
+          role: Database["public"]["Enums"]["app_role"]
+          user_id: string
+        }
+        Update: {
+          id?: string
+          role?: Database["public"]["Enums"]["app_role"]
+          user_id?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
     }
     Functions: {
-      [_ in never]: never
+      claim_grade_seat: {
+        Args: { _grade_id: string }
+        Returns: {
+          capacity: number
+          grade_number: number
+          id: string
+          name: string
+          occupied: number
+        }
+        SetofOptions: {
+          from: "*"
+          to: "grades"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
+      has_role: {
+        Args: {
+          _role: Database["public"]["Enums"]["app_role"]
+          _user_id: string
+        }
+        Returns: boolean
+      }
+      next_application_number: { Args: never; Returns: string }
     }
     Enums: {
-      [_ in never]: never
+      app_role: "admin" | "admissions_officer"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -150,6 +370,8 @@ export type CompositeTypes<
 
 export const Constants = {
   public: {
-    Enums: {},
+    Enums: {
+      app_role: ["admin", "admissions_officer"],
+    },
   },
 } as const
