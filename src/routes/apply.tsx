@@ -1,4 +1,5 @@
-import { createFileRoute, useNavigate, useServerFn } from "@tanstack/react-router";
+import { createFileRoute, useNavigate } from "@tanstack/react-router";
+import { useServerFn } from "@tanstack/react-start";
 import { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { ChevronLeft, ChevronRight, AlertCircle, CalendarClock, MapPin, Banknote, Loader2 } from "lucide-react";
@@ -17,8 +18,14 @@ export const Route = createFileRoute("/apply")({
   component: Apply,
 });
 
-type FormState = Partial<ApplicationInput> & {
-  documents: Partial<ApplicationInput["documents"]>;
+type DocPaths = {
+  idCopyPath?: string;
+  previousResultsPath?: string;
+  proofResiencePath?: string;
+  birthCertificatePath?: string | null;
+};
+type FormState = Partial<Omit<ApplicationInput, "documents">> & {
+  documents: DocPaths;
 };
 
 const STEPS = [
