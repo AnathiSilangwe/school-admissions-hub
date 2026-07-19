@@ -3,7 +3,8 @@ import { Link } from "@tanstack/react-router";
 import { ArrowRight, GraduationCap, FileCheck2, CalendarClock, ShieldCheck } from "lucide-react";
 import { SiteHeader, SiteFooter } from "@/components/site-header";
 import doeLogoAsset from "@/assets/doe-ec.asset.json";
-import badge from "@/assets/school-badge.png";
+import badgeAsset from "@/assets/school-badge.asset.json";
+const badge = badgeAsset.url;
 
 export const Route = createFileRoute("/")({
   head: () => ({
