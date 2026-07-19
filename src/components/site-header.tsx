@@ -1,15 +1,16 @@
 import { Link } from "@tanstack/react-router";
-import logo from "@/assets/logo.png";
+import logo from "@/assets/school-badge.png";
+import doeLogoAsset from "@/assets/doe-ec.asset.json";
 
 export function SiteHeader() {
   return (
     <header className="sticky top-0 z-40 glass-card border-b border-border/50">
       <div className="mx-auto flex max-w-6xl items-center justify-between px-4 py-3">
         <Link to="/" className="flex items-center gap-3">
-          <img src={logo} alt="Thabazi Secondary School" width={40} height={40} className="h-10 w-10" />
+          <img src={logo} alt="Thabazi Secondary School badge" width={48} height={48} className="h-11 w-11 object-contain drop-shadow-sm" />
           <div className="leading-tight">
             <div className="font-display text-base font-bold text-foreground">Thabazi Secondary</div>
-            <div className="text-xs text-muted-foreground">Excellence in Education</div>
+            <div className="text-xs text-muted-foreground italic">Aut Primus Aut Cum Primis</div>
           </div>
         </Link>
         <nav className="flex items-center gap-2 sm:gap-4 text-sm">
@@ -26,9 +27,19 @@ export function SiteHeader() {
 export function SiteFooter() {
   return (
     <footer className="mt-16 border-t border-border/50 bg-surface-muted/50">
-      <div className="mx-auto max-w-6xl px-4 py-8 text-sm text-muted-foreground flex flex-col sm:flex-row items-center justify-between gap-3">
-        <div>© {new Date().getFullYear()} Thabazi Secondary School</div>
-        <div>Admissions Office · 09:00 – 16:00 weekdays</div>
+      <div className="mx-auto max-w-6xl px-4 py-8 text-sm text-muted-foreground flex flex-col sm:flex-row items-center justify-between gap-4">
+        <div className="flex items-center gap-3">
+          <img src={logo} alt="Thabazi Secondary School" width={32} height={32} className="h-8 w-8 object-contain" />
+          <span>© {new Date().getFullYear()} Thabazi Secondary School</span>
+        </div>
+        <div className="flex items-center gap-4">
+          <span>Admissions Office · 09:00 – 16:00 weekdays</span>
+          <img
+            src={doeLogoAsset.url}
+            alt="Province of the Eastern Cape — Department of Education"
+            className="h-9 w-auto opacity-80"
+          />
+        </div>
       </div>
     </footer>
   );

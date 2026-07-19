@@ -2,7 +2,8 @@ import { createFileRoute } from "@tanstack/react-router";
 import { Link } from "@tanstack/react-router";
 import { ArrowRight, GraduationCap, FileCheck2, CalendarClock, ShieldCheck } from "lucide-react";
 import { SiteHeader, SiteFooter } from "@/components/site-header";
-import hero from "@/assets/hero.jpg";
+import doeLogoAsset from "@/assets/doe-ec.asset.json";
+import badge from "@/assets/school-badge.png";
 
 export const Route = createFileRoute("/")({
   head: () => ({
@@ -34,6 +35,17 @@ function Index() {
             <p className="text-lg text-muted-foreground max-w-xl">
               Apply online, upload your documents, and book your admissions appointment — all in one place. The whole process takes less than ten minutes.
             </p>
+            <div className="inline-flex items-center gap-3 rounded-2xl border border-border/60 bg-surface/80 px-4 py-2 shadow-sm">
+              <img
+                src={doeLogoAsset.url}
+                alt="Province of the Eastern Cape — Department of Education"
+                className="h-10 w-auto"
+              />
+              <div className="text-xs text-muted-foreground leading-tight">
+                Proudly part of the<br />
+                <span className="font-semibold text-foreground">Eastern Cape Department of Education</span>
+              </div>
+            </div>
             <div className="flex flex-wrap items-center gap-3">
               <Link
                 to="/apply"
@@ -58,15 +70,15 @@ function Index() {
               ))}
             </div>
           </div>
-          <div className="relative">
-            <div className="absolute -inset-6 rounded-[2.5rem] bg-gradient-to-tr from-brand/20 to-transparent blur-2xl" />
-            <img
-              src={hero}
-              alt="Thabazi Secondary School campus"
-              width={1600}
-              height={1024}
-              className="relative rounded-3xl shadow-glass w-full h-auto object-cover aspect-[5/4]"
-            />
+          <div className="relative flex items-center justify-center">
+            <div className="absolute -inset-6 rounded-full bg-gradient-to-tr from-brand/25 via-brand-soft to-transparent blur-2xl" />
+            <div className="relative glass-card rounded-[2.5rem] p-8 sm:p-12 w-full max-w-md aspect-square flex items-center justify-center">
+              <img
+                src={badge}
+                alt="Thabazi Secondary School badge"
+                className="w-full h-full object-contain drop-shadow-xl"
+              />
+            </div>
           </div>
         </section>
 

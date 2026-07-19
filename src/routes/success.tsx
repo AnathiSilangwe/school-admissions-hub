@@ -1,6 +1,7 @@
 import { createFileRoute, Link, redirect } from "@tanstack/react-router";
 import { CheckCircle2, CalendarClock, MapPin, Banknote } from "lucide-react";
 import { SiteHeader, SiteFooter } from "@/components/site-header";
+import studentsAsset from "@/assets/students.asset.json";
 
 type State = {
   applicationNumber: string;
@@ -82,6 +83,17 @@ function Success() {
             Back to home
           </Link>
         </div>
+
+        <figure className="mt-8 glass-card rounded-2xl overflow-hidden">
+          <img
+            src={studentsAsset.url}
+            alt="Thabazi Secondary School learners at morning assembly"
+            className="w-full h-40 sm:h-48 object-cover"
+          />
+          <figcaption className="px-4 py-2 text-xs text-muted-foreground text-center">
+            Welcome to the Thabazi family — Aut Primus Aut Cum Primis.
+          </figcaption>
+        </figure>
       </main>
       <SiteFooter />
     </div>
