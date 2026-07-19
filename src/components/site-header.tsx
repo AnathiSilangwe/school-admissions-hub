@@ -1,6 +1,7 @@
 import { Link } from "@tanstack/react-router";
-import logo from "@/assets/school-badge.png";
+import badgeAsset from "@/assets/school-badge.asset.json";
 import doeLogoAsset from "@/assets/doe-ec.asset.json";
+const logo = badgeAsset.url;
 
 export function SiteHeader() {
   return (
