@@ -2,7 +2,6 @@ import { createFileRoute } from "@tanstack/react-router";
 import { Link } from "@tanstack/react-router";
 import { ArrowRight, GraduationCap, FileCheck2, CalendarClock, ShieldCheck } from "lucide-react";
 import { SiteHeader, SiteFooter } from "@/components/site-header";
-import hero from "@/assets/hero.jpg";
 import doeLogoAsset from "@/assets/doe-ec.asset.json";
 import badge from "@/assets/school-badge.png";
 
