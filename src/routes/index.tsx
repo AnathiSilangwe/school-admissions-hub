@@ -28,7 +28,7 @@ function Index() {
           <div className="space-y-6">
             <div className="inline-flex items-center gap-2 rounded-full bg-brand-soft px-3 py-1 text-xs font-semibold text-brand">
               <span className="inline-block h-1.5 w-1.5 rounded-full bg-brand animate-pulse" />
-              Admissions open for 2026
+              Admissions open for 2027
             </div>
             <h1 className="font-display text-4xl sm:text-6xl font-bold leading-[1.05] text-foreground">
               Your future starts at <span className="text-brand">Thabazi</span> Secondary.
