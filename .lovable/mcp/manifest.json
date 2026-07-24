@@ -1,0 +1,133 @@
+{
+  "version": 1,
+  "sdk_version": "0.24.0",
+  "path": "/mcp",
+  "auth": {
+    "type": "oauth",
+    "issuer": "https://zyeikgopedrzbzmkfnop.supabase.co/auth/v1",
+    "accepted_audiences": [
+      "authenticated"
+    ]
+  },
+  "mcp": {
+    "server": {
+      "name": "thabazi-admissions-mcp",
+      "version": "0.1.0",
+      "title": "Thabazi Secondary School Admissions"
+    },
+    "tools": [
+      {
+        "name": "list_grades",
+        "title": "List grades and seat availability",
+        "description": "Return every grade at Thabazi Secondary School with its capacity, occupied seats, and remaining space.",
+        "annotations": {
+          "readOnlyHint": true,
+          "idempotentHint": true,
+          "openWorldHint": false
+        },
+        "inputSchema": {
+          "$schema": "http://json-schema.org/draft-07/schema#",
+          "type": "object",
+          "properties": {}
+        },
+        "outputSchema": null
+      },
+      {
+        "name": "list_applications",
+        "title": "List admissions applications",
+        "description": "List admissions applications for Thabazi Secondary School. Requires an admin or admissions officer account. Optionally filter by status (pending, accepted, declined, waitlist).",
+        "annotations": {
+          "readOnlyHint": true,
+          "idempotentHint": true,
+          "openWorldHint": false
+        },
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "status": {
+              "type": "string",
+              "enum": [
+                "pending",
+                "accepted",
+                "declined",
+                "waitlist"
+              ],
+              "description": "Filter by application_status."
+            },
+            "limit": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100,
+              "description": "Maximum rows to return (default 25)."
+            }
+          },
+          "additionalProperties": false,
+          "$schema": "http://json-schema.org/draft-07/schema#"
+        },
+        "outputSchema": null
+      },
+      {
+        "name": "get_application",
+        "title": "Get an application by number",
+        "description": "Fetch full applicant, document, and appointment details for one application number (e.g. TSS-2027-000123). Requires an admin or admissions officer account.",
+        "annotations": {
+          "readOnlyHint": true,
+          "idempotentHint": true,
+          "openWorldHint": false
+        },
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "application_number": {
+              "type": "string",
+              "minLength": 1,
+              "description": "The application number, e.g. TSS-2027-000123."
+            }
+          },
+          "required": [
+            "application_number"
+          ],
+          "additionalProperties": false,
+          "$schema": "http://json-schema.org/draft-07/schema#"
+        },
+        "outputSchema": null
+      },
+      {
+        "name": "update_application_status",
+        "title": "Update an application's status",
+        "description": "Set the status of an admissions application (accepted, declined, pending, or waitlist). Requires an admin or admissions officer account.",
+        "annotations": {
+          "readOnlyHint": false,
+          "destructiveHint": false,
+          "idempotentHint": true,
+          "openWorldHint": false
+        },
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "application_number": {
+              "type": "string",
+              "minLength": 1
+            },
+            "status": {
+              "type": "string",
+              "enum": [
+                "pending",
+                "accepted",
+                "declined",
+                "waitlist"
+              ]
+            }
+          },
+          "required": [
+            "application_number",
+            "status"
+          ],
+          "additionalProperties": false,
+          "$schema": "http://json-schema.org/draft-07/schema#"
+        },
+        "outputSchema": null
+      }
+    ]
+  }
+}
