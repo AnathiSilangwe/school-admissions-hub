@@ -74,9 +74,11 @@ export const submitApplication = createServerFn({ method: "POST" })
     }
     if (!result) throw new Error("Application submission failed.");
 
+    const row = result as { application_number: string; appointment_date: string };
+
     return {
-      applicationNumber: result.application_number as string,
-      appointmentDate: result.appointment_date as string,
+      applicationNumber: row.application_number,
+      appointmentDate: row.appointment_date,
       appointmentTime: "09:00 AM",
       venue: "Thabazi Secondary School Admissions Office",
       fee: "R100",
