@@ -241,6 +241,36 @@ export type Database = {
         Returns: boolean
       }
       next_application_number: { Args: never; Returns: string }
+      submit_application: {
+        Args: {
+          _academic_average: number
+          _address: string
+          _age: number
+          _applying_grade_id: string
+          _birth_certificate_path?: string
+          _current_grade: string
+          _date_of_birth: string
+          _email: string
+          _first_name: string
+          _gender: string
+          _id_copy_path: string
+          _id_number: string
+          _last_name: string
+          _parent_email: string
+          _parent_name: string
+          _parent_phone: string
+          _parent_relationship: string
+          _phone: string
+          _previous_results_path: string
+          _previous_school: string
+          _proof_residence_path: string
+        }
+        Returns: {
+          application_number: string
+          appointment_date: string
+          appointment_time: string
+        }[]
+      }
     }
     Enums: {
       app_role: "admin" | "admissions_officer"
