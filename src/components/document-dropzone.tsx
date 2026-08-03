@@ -38,7 +38,7 @@ export function DocumentDropzone({ label, required, submissionId, field, value, 
       const path = `${submissionId}/${field}.${ext}`;
       const { error } = await supabase.storage
         .from("admissions-documents")
-        .upload(path, file, { upsert: true, contentType: file.type });
+        .upload(path, file, { contentType: file.type });
       setUploading(false);
       if (error) {
         setError(error.message);
