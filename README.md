@@ -64,6 +64,48 @@ The application uses:
 - Least-privilege access
 
 Anonymous applicants can submit applications and upload required documents, while student records and private documents are restricted to authorised school staff.
+Why I Built This
+
+This project is more than a software development exercise. It is an opportunity to use technology to address a real-world challenge within a community that is personally meaningful to me.
+
+As an Information Technology student, I wanted to move beyond academic projects and build something that demonstrates how software can be used to improve everyday processes and create meaningful impact.
+
+Technology is most valuable when it can be used to solve real problems and give back to the community.
+
+Future Improvements
+
+The project is continuously evolving, with plans to introduce additional features such as:
+
+SMS notifications
+Applicant application-status tracking
+Automated admission letters
+Advanced analytics and reporting
+Parent/guardian portal
+Mobile application
+Integration with additional school management systems
+Project Status
+
+Active Development
+
+The core admissions, database, document management, appointment, authentication, and administration functionality has been implemented, with additional features being developed and refined.
+
+Project Purpose
+
+This project represents my effort to combine software development, database management, cybersecurity, cloud technologies, and AI-assisted development to create a practical solution for my community.
+
+It is both a portfolio project and a personal contribution to the school and community that helped shape my journey in technology.
+
+**Author : **Anathi Silangwe**
+
+Bachelor of Information Technology | Software Development | Cybersecurity | Data & AI
+
+GitHub: AnathiSilangwe**
+
+Acknowledgement
+
+This project was inspired by my experiences and connection with my rural high school and community. It represents my desire to use the knowledge and skills I have gained in technology to contribute to meaningful change.
+
+Built with purpose. Built for community.
 
 ## Application Workflow
 
@@ -85,3 +127,4 @@ Confirmation Email
 School Admin Reviews Application
    ↓
 Accept / Decline
+
