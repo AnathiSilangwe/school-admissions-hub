@@ -73,9 +73,13 @@ const STATUS_COLORS: Record<string, string> = {
 };
 const GENDER_COLORS = [BLUE, "hsl(330 81% 60%)", GOLD];
 
+const TABS = ["Dashboard", "Applications", "Grade Management"] as const;
+type Tab = (typeof TABS)[number];
+
 function AdminPage() {
   const fetcher = useServerFn(getAdminStats);
   const { data } = useSuspenseQuery(statsQueryOptions(() => fetcher()));
+  const [tab, setTab] = useState<Tab>("Dashboard");
 
   async function signOut() {
     await supabase.auth.signOut();
@@ -104,7 +108,29 @@ function AdminPage() {
         </div>
       </header>
 
+      <nav className="border-b border-border/60 bg-surface/40">
+        <div className="mx-auto flex max-w-7xl gap-1 overflow-x-auto px-6">
+          {TABS.map((t) => (
+            <button
+              key={t}
+              onClick={() => setTab(t)}
+              className={`whitespace-nowrap border-b-2 px-4 py-3 text-sm font-medium transition-colors ${
+                tab === t
+                  ? "border-brand text-brand"
+                  : "border-transparent text-muted-foreground hover:text-foreground"
+              }`}
+            >
+              {t}
+            </button>
+          ))}
+        </div>
+      </nav>
+
       <div className="mx-auto max-w-7xl space-y-6 px-6 py-8">
+        {tab === "Applications" && <ApplicationsPanel />}
+        {tab === "Grade Management" && <GradesPanel />}
+        {tab === "Dashboard" && (
+        <div className="space-y-6">
         {/* Summary cards */}
         <section className="grid grid-cols-2 gap-4 md:grid-cols-3 lg:grid-cols-6">
           <SummaryCard label="Total" value={data.totals.total} accent="text-foreground" />
@@ -205,8 +231,282 @@ function AdminPage() {
             </ResponsiveContainer>
           </ChartCard>
         </div>
+        </div>
+        )}
       </div>
     </main>
+  );
+}
+
+function GradesPanel() {
+  const qc = useQueryClient();
+  const fetchGrades = useServerFn(listGrades);
+  const saveCapacity = useServerFn(setGradeCapacity);
+  const { data: grades, isLoading, error } = useQuery({
+    queryKey: ["admin", "grades"],
+    queryFn: () => fetchGrades(),
+  });
+  const [editing, setEditing] = useState<string | null>(null);
+  const [value, setValue] = useState("");
+  const [formError, setFormError] = useState<string | null>(null);
+
+  const mutation = useMutation({
+    mutationFn: (vars: { gradeId: string; capacity: number }) => saveCapacity({ data: vars }),
+    onSuccess: async (row) => {
+      setEditing(null);
+      setFormError(null);
+      toast.success(`${row.name} capacity updated to ${row.capacity}.`);
+      await qc.invalidateQueries({ queryKey: ["admin", "grades"] });
+      await qc.invalidateQueries({ queryKey: ["admin", "stats"] });
+    },
+    onError: (e: unknown) => setFormError(e instanceof Error ? e.message : "Could not update capacity."),
+  });
+
+  function submit(gradeId: string, occupied: number) {
+    const capacity = Number(value);
+    if (!Number.isInteger(capacity) || capacity < 0) {
+      setFormError("Capacity must be a whole number of zero or more.");
+      return;
+    }
+    if (capacity < occupied) {
+      setFormError(`Capacity cannot be below the ${occupied} learners already enrolled.`);
+      return;
+    }
+    mutation.mutate({ gradeId, capacity });
+  }
+
+  if (isLoading) return <p className="text-sm text-muted-foreground">Loading grades…</p>;
+  if (error) return <p role="alert" className="text-sm text-destructive">{(error as Error).message}</p>;
+
+  return (
+    <section className="rounded-2xl border border-border/60 bg-surface/80 p-5 shadow-glass backdrop-blur">
+      <h2 className="font-display text-lg font-semibold text-foreground">Grade management</h2>
+      <p className="mt-1 text-sm text-muted-foreground">
+        Enrolled seats are controlled by the admissions workflow and cannot be edited directly.
+      </p>
+      {formError && <p role="alert" className="mt-3 text-sm text-destructive">{formError}</p>}
+      <div className="mt-4 overflow-x-auto">
+        <table className="w-full text-sm">
+          <thead>
+            <tr className="border-b border-border/60 text-left text-xs uppercase tracking-wide text-muted-foreground">
+              <th className="py-2 pr-4">Grade</th>
+              <th className="py-2 pr-4">Capacity</th>
+              <th className="py-2 pr-4">Enrolled</th>
+              <th className="py-2 pr-4">Available seats</th>
+              <th className="py-2">Action</th>
+            </tr>
+          </thead>
+          <tbody>
+            {(grades ?? []).map((g: any) => (
+              <tr key={g.id} className="border-b border-border/40">
+                <td className="py-3 pr-4 font-medium text-foreground">{g.name}</td>
+                <td className="py-3 pr-4">
+                  {editing === g.id ? (
+                    <input
+                      type="number"
+                      min={0}
+                      value={value}
+                      onChange={(e) => setValue(e.target.value)}
+                      className="w-24 rounded-md border border-input bg-background px-2 py-1"
+                      aria-label={`Capacity for ${g.name}`}
+                    />
+                  ) : (
+                    g.capacity
+                  )}
+                </td>
+                <td className="py-3 pr-4">{g.occupied}</td>
+                <td className="py-3 pr-4">{Math.max(g.capacity - g.occupied, 0)}</td>
+                <td className="py-3">
+                  {editing === g.id ? (
+                    <span className="flex gap-2">
+                      <button
+                        onClick={() => submit(g.id, g.occupied)}
+                        disabled={mutation.isPending}
+                        className="rounded-full bg-brand px-3 py-1 text-xs font-semibold text-brand-foreground disabled:opacity-60"
+                      >
+                        Save
+                      </button>
+                      <button
+                        onClick={() => { setEditing(null); setFormError(null); }}
+                        className="rounded-full border border-border/60 px-3 py-1 text-xs"
+                      >
+                        Cancel
+                      </button>
+                    </span>
+                  ) : (
+                    <button
+                      onClick={() => { setEditing(g.id); setValue(String(g.capacity)); setFormError(null); }}
+                      className="rounded-full border border-border/60 px-3 py-1 text-xs font-medium hover:bg-muted"
+                    >
+                      Edit
+                    </button>
+                  )}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </section>
+  );
+}
+
+function ApplicationsPanel() {
+  const qc = useQueryClient();
+  const fetchApps = useServerFn(listApplications);
+  const setStatus = useServerFn(updateApplicationStatus);
+  const fetchDocs = useServerFn(getApplicationDocuments);
+  const [openId, setOpenId] = useState<string | null>(null);
+  const [query, setQuery] = useState("");
+
+  const { data: apps, isLoading, error } = useQuery({
+    queryKey: ["admin", "applications"],
+    queryFn: () => fetchApps(),
+  });
+
+  const statusMutation = useMutation({
+    mutationFn: (vars: { applicantId: string; status: string }) => setStatus({ data: vars }),
+    onSuccess: async () => {
+      toast.success("Application status updated.");
+      await qc.invalidateQueries({ queryKey: ["admin", "applications"] });
+      await qc.invalidateQueries({ queryKey: ["admin", "stats"] });
+    },
+    onError: (e: unknown) => toast.error(e instanceof Error ? e.message : "Could not update status."),
+  });
+
+  const { data: docs } = useQuery({
+    queryKey: ["admin", "documents", openId],
+    queryFn: () => fetchDocs({ data: { applicantId: openId! } }),
+    enabled: !!openId,
+  });
+
+  if (isLoading) return <p className="text-sm text-muted-foreground">Loading applications…</p>;
+  if (error) return <p role="alert" className="text-sm text-destructive">{(error as Error).message}</p>;
+
+  const rows = (apps ?? []).filter((a: any) => {
+    const q = query.trim().toLowerCase();
+    if (!q) return true;
+    return `${a.first_name} ${a.last_name} ${a.application_number} ${a.grade}`.toLowerCase().includes(q);
+  });
+
+  return (
+    <section className="rounded-2xl border border-border/60 bg-surface/80 p-5 shadow-glass backdrop-blur">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <h2 className="font-display text-lg font-semibold text-foreground">Applications</h2>
+        <input
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+          placeholder="Search name, number or grade"
+          className="rounded-md border border-input bg-background px-3 py-1.5 text-sm"
+          aria-label="Search applications"
+        />
+      </div>
+      <div className="mt-4 overflow-x-auto">
+        <table className="w-full text-sm">
+          <thead>
+            <tr className="border-b border-border/60 text-left text-xs uppercase tracking-wide text-muted-foreground">
+              <th className="py-2 pr-4">Number</th>
+              <th className="py-2 pr-4">Applicant</th>
+              <th className="py-2 pr-4">Grade</th>
+              <th className="py-2 pr-4">Gender</th>
+              <th className="py-2 pr-4">Age</th>
+              <th className="py-2 pr-4">Average</th>
+              <th className="py-2 pr-4">Status</th>
+              <th className="py-2">Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((a: any) => (
+              <tr key={a.id} className="border-b border-border/40 align-top">
+                <td className="py-3 pr-4 font-mono text-xs">{a.application_number}</td>
+                <td className="py-3 pr-4 font-medium text-foreground">{a.first_name} {a.last_name}</td>
+                <td className="py-3 pr-4">{a.grade}</td>
+                <td className="py-3 pr-4">{a.gender}</td>
+                <td className="py-3 pr-4">{a.age}</td>
+                <td className="py-3 pr-4">{a.academic_average}%</td>
+                <td className="py-3 pr-4 capitalize">{a.application_status}</td>
+                <td className="py-3">
+                  <div className="flex flex-wrap gap-2">
+                    <button
+                      onClick={() => setOpenId(openId === a.id ? null : a.id)}
+                      className="rounded-full border border-border/60 px-3 py-1 text-xs hover:bg-muted"
+                    >
+                      {openId === a.id ? "Hide" : "View"}
+                    </button>
+                    <button
+                      onClick={() => statusMutation.mutate({ applicantId: a.id, status: "accepted" })}
+                      className="rounded-full bg-emerald-600 px-3 py-1 text-xs font-semibold text-white"
+                    >
+                      Accept
+                    </button>
+                    <button
+                      onClick={() => statusMutation.mutate({ applicantId: a.id, status: "declined" })}
+                      className="rounded-full bg-red-600 px-3 py-1 text-xs font-semibold text-white"
+                    >
+                      Decline
+                    </button>
+                  </div>
+                </td>
+              </tr>
+            ))}
+            {rows.length === 0 && (
+              <tr><td colSpan={8} className="py-6 text-center text-muted-foreground">No applications found.</td></tr>
+            )}
+          </tbody>
+        </table>
+      </div>
+
+      {openId && (() => {
+        const a = rows.find((r: any) => r.id === openId);
+        if (!a) return null;
+        return (
+          <div className="mt-6 rounded-xl border border-border/60 bg-background/60 p-5">
+            <h3 className="font-display text-base font-semibold text-foreground">
+              {a.first_name} {a.last_name} · {a.application_number}
+            </h3>
+            <dl className="mt-3 grid gap-x-6 gap-y-2 text-sm sm:grid-cols-2">
+              <Detail label="Email" value={a.email} />
+              <Detail label="Phone" value={a.phone} />
+              <Detail label="Parent / guardian" value={a.parent_name} />
+              <Detail label="Parent email" value={a.parent_email} />
+              <Detail label="Parent phone" value={a.parent_phone} />
+              <Detail label="Previous school" value={a.previous_school} />
+              <Detail label="Current grade" value={a.current_grade} />
+              <Detail label="Applying for" value={a.grade} />
+              <Detail label="Academic average" value={`${a.academic_average}%`} />
+              <Detail label="Status" value={a.application_status} />
+              <Detail
+                label="Appointment"
+                value={a.appointment ? `${a.appointment.appointment_date} at ${a.appointment.appointment_time}` : "—"}
+              />
+              <Detail label="Venue" value={a.appointment?.venue ?? "—"} />
+            </dl>
+            <div className="mt-4">
+              <h4 className="text-sm font-semibold text-foreground">Documents</h4>
+              <ul className="mt-2 flex flex-wrap gap-3 text-sm">
+                {(docs ?? []).map((d) => (
+                  <li key={d.label}>
+                    <a href={d.url} target="_blank" rel="noreferrer" className="text-brand underline">
+                      {d.label}
+                    </a>
+                  </li>
+                ))}
+                {(!docs || docs.length === 0) && <li className="text-muted-foreground">No documents available.</li>}
+              </ul>
+            </div>
+          </div>
+        );
+      })()}
+    </section>
+  );
+}
+
+function Detail({ label, value }: { label: string; value: string }) {
+  return (
+    <div>
+      <dt className="text-xs uppercase tracking-wide text-muted-foreground">{label}</dt>
+      <dd className="text-foreground">{value}</dd>
+    </div>
   );
 }
 
