@@ -170,6 +170,56 @@ export type Database = {
           },
         ]
       }
+      email_outbox: {
+        Row: {
+          applicant_id: string | null
+          attempts: number
+          body_text: string
+          created_at: string
+          id: string
+          last_error: string | null
+          sent_at: string | null
+          status: string
+          subject: string
+          to_email: string
+          updated_at: string
+        }
+        Insert: {
+          applicant_id?: string | null
+          attempts?: number
+          body_text: string
+          created_at?: string
+          id?: string
+          last_error?: string | null
+          sent_at?: string | null
+          status?: string
+          subject: string
+          to_email: string
+          updated_at?: string
+        }
+        Update: {
+          applicant_id?: string | null
+          attempts?: number
+          body_text?: string
+          created_at?: string
+          id?: string
+          last_error?: string | null
+          sent_at?: string | null
+          status?: string
+          subject?: string
+          to_email?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "email_outbox_applicant_id_fkey"
+            columns: ["applicant_id"]
+            isOneToOne: false
+            referencedRelation: "applicants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       grades: {
         Row: {
           capacity: number
@@ -217,6 +267,22 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      admin_set_grade_capacity: {
+        Args: { _capacity: number; _grade_id: string }
+        Returns: {
+          capacity: number
+          grade_number: number
+          id: string
+          name: string
+          occupied: number
+        }
+        SetofOptions: {
+          from: "*"
+          to: "grades"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
       claim_grade_seat: {
         Args: { _grade_id: string }
         Returns: {
