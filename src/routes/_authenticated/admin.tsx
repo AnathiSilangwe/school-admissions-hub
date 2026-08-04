@@ -17,8 +17,19 @@ import {
   ResponsiveContainer,
 } from "recharts";
 
+import { useState } from "react";
 import { getAdminStats, type AdminStats } from "@/lib/admin-stats.functions";
+import {
+  getStaffRole,
+  listGrades,
+  setGradeCapacity,
+  listApplications,
+  updateApplicationStatus,
+  getApplicationDocuments,
+} from "@/lib/admin.functions";
 import { supabase } from "@/integrations/supabase/client";
+import { useQueryClient, useQuery, useMutation } from "@tanstack/react-query";
+import { toast } from "sonner";
 
 const statsQueryOptions = (fetcher: () => Promise<AdminStats>) =>
   queryOptions({ queryKey: ["admin", "stats"], queryFn: fetcher });
@@ -35,6 +46,9 @@ export const Route = createFileRoute("/_authenticated/admin")({
       { name: "twitter:card", content: "summary" },
     ],
   }),
+  beforeLoad: async () => {
+    await getStaffRole();
+  },
   component: AdminPage,
   errorComponent: ({ error }) => (
     <div role="alert" className="p-8 text-sm text-destructive">
