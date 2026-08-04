@@ -51,6 +51,8 @@ The Thabazi Secondary School Admissions Hub aims to provide a centralised and us
 
 Because the system handles sensitive student information, security is an important part of the project.
 
+- Here is a link to the website [].
+
 The application uses:
 
 - Supabase Authentication
