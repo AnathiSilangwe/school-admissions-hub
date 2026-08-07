@@ -27,6 +27,8 @@ import {
   updateApplicationStatus,
   getApplicationDocuments,
 } from "@/lib/admin.functions";
+import { listAuditLogs } from "@/lib/admin.functions";
+import { listStaff, inviteStaff, setStaffRole, setStaffActive } from "@/lib/staff.functions";
 import { supabase } from "@/integrations/supabase/client";
 import { useQueryClient, useQuery, useMutation } from "@tanstack/react-query";
 import { toast } from "sonner";
@@ -73,13 +75,24 @@ const STATUS_COLORS: Record<string, string> = {
 };
 const GENDER_COLORS = [BLUE, "hsl(330 81% 60%)", GOLD];
 
-const TABS = ["Dashboard", "Applications", "Grade Management"] as const;
+const TABS = [
+  "Dashboard",
+  "Applications",
+  "Accepted / Enrolled",
+  "Declined",
+  "Grade Management",
+  "Staff Management",
+  "Audit Logs",
+] as const;
 type Tab = (typeof TABS)[number];
 
 function AdminPage() {
   const fetcher = useServerFn(getAdminStats);
   const { data } = useSuspenseQuery(statsQueryOptions(() => fetcher()));
   const [tab, setTab] = useState<Tab>("Dashboard");
+  const { data: roleInfo } = useQuery({ queryKey: ["admin", "role"], queryFn: () => getStaffRole() });
+  const isAdmin = roleInfo?.role === "admin";
+  const visibleTabs = TABS.filter((t) => isAdmin || (t !== "Staff Management" && t !== "Audit Logs"));
 
   async function signOut() {
     await supabase.auth.signOut();
@@ -110,7 +123,7 @@ function AdminPage() {
 
       <nav className="border-b border-border/60 bg-surface/40">
         <div className="mx-auto flex max-w-7xl gap-1 overflow-x-auto px-6">
-          {TABS.map((t) => (
+          {visibleTabs.map((t) => (
             <button
               key={t}
               onClick={() => setTab(t)}
@@ -127,8 +140,12 @@ function AdminPage() {
       </nav>
 
       <div className="mx-auto max-w-7xl space-y-6 px-6 py-8">
-        {tab === "Applications" && <ApplicationsPanel />}
+        {tab === "Applications" && <ApplicationsPanel mode="pending" />}
+        {tab === "Accepted / Enrolled" && <ApplicationsPanel mode="accepted" />}
+        {tab === "Declined" && <ApplicationsPanel mode="declined" />}
         {tab === "Grade Management" && <GradesPanel />}
+        {tab === "Staff Management" && isAdmin && <StaffPanel />}
+        {tab === "Audit Logs" && isAdmin && <AuditPanel />}
         {tab === "Dashboard" && (
         <div className="space-y-6">
         {/* Summary cards */}
@@ -351,13 +368,34 @@ function GradesPanel() {
   );
 }
 
-function ApplicationsPanel() {
+type AppMode = "pending" | "accepted" | "declined";
+
+const MODE_META: Record<AppMode, { title: string; blurb: string; empty: string }> = {
+  pending: {
+    title: "Pending applications",
+    blurb: "Applications still awaiting a decision.",
+    empty: "No pending applications.",
+  },
+  accepted: {
+    title: "Accepted / enrolled",
+    blurb: "Accepted learners, grouped by the grade they were accepted into.",
+    empty: "No accepted applications yet.",
+  },
+  declined: {
+    title: "Declined applications",
+    blurb: "Declined applications are kept for historical records and do not hold a seat.",
+    empty: "No declined applications.",
+  },
+};
+
+function ApplicationsPanel({ mode }: { mode: AppMode }) {
   const qc = useQueryClient();
   const fetchApps = useServerFn(listApplications);
   const setStatus = useServerFn(updateApplicationStatus);
   const fetchDocs = useServerFn(getApplicationDocuments);
   const [openId, setOpenId] = useState<string | null>(null);
   const [query, setQuery] = useState("");
+  const [gradeFilter, setGradeFilter] = useState("all");
 
   const { data: apps, isLoading, error } = useQuery({
     queryKey: ["admin", "applications"],
@@ -368,8 +406,11 @@ function ApplicationsPanel() {
     mutationFn: (vars: { applicantId: string; status: string }) => setStatus({ data: vars }),
     onSuccess: async () => {
       toast.success("Application status updated.");
+      setOpenId(null);
       await qc.invalidateQueries({ queryKey: ["admin", "applications"] });
       await qc.invalidateQueries({ queryKey: ["admin", "stats"] });
+      await qc.invalidateQueries({ queryKey: ["admin", "grades"] });
+      await qc.invalidateQueries({ queryKey: ["admin", "audit"] });
     },
     onError: (e: unknown) => toast.error(e instanceof Error ? e.message : "Could not update status."),
   });
@@ -383,120 +424,420 @@ function ApplicationsPanel() {
   if (isLoading) return <p className="text-sm text-muted-foreground">Loading applications…</p>;
   if (error) return <p role="alert" className="text-sm text-destructive">{(error as Error).message}</p>;
 
-  const rows = (apps ?? []).filter((a: any) => {
+  const all = (apps ?? []) as any[];
+  const inMode = all.filter((a) => a.application_status === mode);
+  const grades = Array.from(new Set(all.map((a) => a.grade))).sort();
+
+  const rows = inMode.filter((a) => {
     const q = query.trim().toLowerCase();
+    if (gradeFilter !== "all" && a.grade !== gradeFilter) return false;
     if (!q) return true;
     return `${a.first_name} ${a.last_name} ${a.application_number} ${a.grade}`.toLowerCase().includes(q);
   });
 
+  const grouped = mode === "pending" ? null : groupByGrade(rows);
+  const meta = MODE_META[mode];
+  const openRow = openId ? rows.find((r) => r.id === openId) : null;
+
   return (
     <section className="rounded-2xl border border-border/60 bg-surface/80 p-5 shadow-glass backdrop-blur">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <h2 className="font-display text-lg font-semibold text-foreground">Applications</h2>
-        <input
-          value={query}
-          onChange={(e) => setQuery(e.target.value)}
-          placeholder="Search name, number or grade"
-          className="rounded-md border border-input bg-background px-3 py-1.5 text-sm"
-          aria-label="Search applications"
-        />
+      <div className="flex flex-wrap items-end justify-between gap-3">
+        <div>
+          <h2 className="font-display text-lg font-semibold text-foreground">{meta.title}</h2>
+          <p className="mt-1 text-sm text-muted-foreground">{meta.blurb}</p>
+        </div>
+        <div className="flex flex-wrap gap-2">
+          <select
+            value={gradeFilter}
+            onChange={(e) => setGradeFilter(e.target.value)}
+            className="rounded-md border border-input bg-background px-3 py-1.5 text-sm"
+            aria-label="Filter by grade"
+          >
+            <option value="all">All grades</option>
+            {grades.map((g) => (
+              <option key={g} value={g}>{g}</option>
+            ))}
+          </select>
+          <input
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            placeholder="Search name, number or grade"
+            className="rounded-md border border-input bg-background px-3 py-1.5 text-sm"
+            aria-label="Search applications"
+          />
+        </div>
       </div>
-      <div className="mt-4 overflow-x-auto">
-        <table className="w-full text-sm">
-          <thead>
-            <tr className="border-b border-border/60 text-left text-xs uppercase tracking-wide text-muted-foreground">
-              <th className="py-2 pr-4">Number</th>
-              <th className="py-2 pr-4">Applicant</th>
-              <th className="py-2 pr-4">Grade</th>
-              <th className="py-2 pr-4">Gender</th>
-              <th className="py-2 pr-4">Age</th>
-              <th className="py-2 pr-4">Average</th>
-              <th className="py-2 pr-4">Status</th>
-              <th className="py-2">Actions</th>
-            </tr>
-          </thead>
-          <tbody>
-            {rows.map((a: any) => (
-              <tr key={a.id} className="border-b border-border/40 align-top">
-                <td className="py-3 pr-4 font-mono text-xs">{a.application_number}</td>
-                <td className="py-3 pr-4 font-medium text-foreground">{a.first_name} {a.last_name}</td>
-                <td className="py-3 pr-4">{a.grade}</td>
-                <td className="py-3 pr-4">{a.gender}</td>
-                <td className="py-3 pr-4">{a.age}</td>
-                <td className="py-3 pr-4">{a.academic_average}%</td>
-                <td className="py-3 pr-4 capitalize">{a.application_status}</td>
-                <td className="py-3">
-                  <div className="flex flex-wrap gap-2">
+
+      {rows.length === 0 && <p className="mt-6 text-sm text-muted-foreground">{meta.empty}</p>}
+
+      {grouped
+        ? grouped.map(([grade, list]) => (
+            <div key={grade} className="mt-6">
+              <h3 className="font-display text-base font-semibold text-foreground">
+                {grade} <span className="text-sm font-normal text-muted-foreground">· {list.length} application{list.length === 1 ? "" : "s"}</span>
+              </h3>
+              <ApplicationsTable
+                rows={list}
+                mode={mode}
+                openId={openId}
+                onToggle={(id) => setOpenId(openId === id ? null : id)}
+                onStatus={(id, status) => statusMutation.mutate({ applicantId: id, status })}
+              />
+            </div>
+          ))
+        : rows.length > 0 && (
+            <ApplicationsTable
+              rows={rows}
+              mode={mode}
+              openId={openId}
+              onToggle={(id) => setOpenId(openId === id ? null : id)}
+              onStatus={(id, status) => statusMutation.mutate({ applicantId: id, status })}
+            />
+          )}
+
+      {openRow && (
+        <div className="mt-6 rounded-xl border border-border/60 bg-background/60 p-5">
+          <h3 className="font-display text-base font-semibold text-foreground">
+            {openRow.first_name} {openRow.last_name} · {openRow.application_number}
+          </h3>
+          <dl className="mt-3 grid gap-x-6 gap-y-2 text-sm sm:grid-cols-2">
+            <Detail label="Email" value={openRow.email} />
+            <Detail label="Phone" value={openRow.phone} />
+            <Detail label="Parent / guardian" value={openRow.parent_name} />
+            <Detail label="Parent email" value={openRow.parent_email} />
+            <Detail label="Parent phone" value={openRow.parent_phone} />
+            <Detail label="Previous school" value={openRow.previous_school} />
+            <Detail label="Current grade" value={openRow.current_grade} />
+            <Detail label="Applying for" value={openRow.grade} />
+            <Detail label="Academic average" value={`${openRow.academic_average}%`} />
+            <Detail label="Status" value={openRow.application_status} />
+            <Detail label="Applied on" value={formatDate(openRow.created_at)} />
+            <Detail
+              label="Appointment"
+              value={
+                openRow.appointment
+                  ? `${openRow.appointment.appointment_date} at ${openRow.appointment.appointment_time}`
+                  : "—"
+              }
+            />
+            <Detail label="Venue" value={openRow.appointment?.venue ?? "—"} />
+          </dl>
+          <div className="mt-4">
+            <h4 className="text-sm font-semibold text-foreground">Documents</h4>
+            <ul className="mt-2 flex flex-wrap gap-3 text-sm">
+              {(docs ?? []).map((d) => (
+                <li key={d.label}>
+                  <a href={d.url} target="_blank" rel="noreferrer" className="text-brand underline">
+                    {d.label}
+                  </a>
+                </li>
+              ))}
+              {(!docs || docs.length === 0) && <li className="text-muted-foreground">No documents available.</li>}
+            </ul>
+          </div>
+        </div>
+      )}
+    </section>
+  );
+}
+
+function groupByGrade(rows: any[]): Array<[string, any[]]> {
+  const map = new Map<string, any[]>();
+  for (const r of rows) {
+    const list = map.get(r.grade) ?? [];
+    list.push(r);
+    map.set(r.grade, list);
+  }
+  return Array.from(map.entries()).sort(([a], [b]) => a.localeCompare(b, undefined, { numeric: true }));
+}
+
+function formatDate(value?: string | null) {
+  if (!value) return "—";
+  return new Date(value).toLocaleDateString("en-ZA", { day: "2-digit", month: "short", year: "numeric" });
+}
+
+function StatusBadge({ status }: { status: string }) {
+  const tone =
+    status === "accepted"
+      ? "bg-emerald-100 text-emerald-800"
+      : status === "declined"
+        ? "bg-red-100 text-red-800"
+        : status === "pending"
+          ? "bg-amber-100 text-amber-800"
+          : "bg-muted text-muted-foreground";
+  return <span className={`rounded-full px-2 py-0.5 text-xs font-medium capitalize ${tone}`}>{status}</span>;
+}
+
+function ApplicationsTable({
+  rows,
+  mode,
+  openId,
+  onToggle,
+  onStatus,
+}: {
+  rows: any[];
+  mode: AppMode;
+  openId: string | null;
+  onToggle: (id: string) => void;
+  onStatus: (id: string, status: string) => void;
+}) {
+  return (
+    <div className="mt-3 overflow-x-auto">
+      <table className="w-full text-sm">
+        <thead>
+          <tr className="border-b border-border/60 text-left text-xs uppercase tracking-wide text-muted-foreground">
+            <th className="py-2 pr-4">Number</th>
+            <th className="py-2 pr-4">Applicant</th>
+            <th className="py-2 pr-4">Grade</th>
+            <th className="py-2 pr-4">Applied</th>
+            <th className="py-2 pr-4">Average</th>
+            <th className="py-2 pr-4">Appointment</th>
+            <th className="py-2 pr-4">Status</th>
+            <th className="py-2">Actions</th>
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((a) => (
+            <tr key={a.id} className="border-b border-border/40 align-top">
+              <td className="py-3 pr-4 font-mono text-xs">{a.application_number}</td>
+              <td className="py-3 pr-4 font-medium text-foreground">{a.first_name} {a.last_name}</td>
+              <td className="py-3 pr-4">{a.grade}</td>
+              <td className="py-3 pr-4">{formatDate(a.created_at)}</td>
+              <td className="py-3 pr-4">{a.academic_average}%</td>
+              <td className="py-3 pr-4">
+                {a.appointment ? `${a.appointment.appointment_date} ${String(a.appointment.appointment_time).slice(0, 5)}` : "—"}
+              </td>
+              <td className="py-3 pr-4"><StatusBadge status={a.application_status} /></td>
+              <td className="py-3">
+                <div className="flex flex-wrap gap-2">
+                  <button
+                    onClick={() => onToggle(a.id)}
+                    className="rounded-full border border-border/60 px-3 py-1 text-xs hover:bg-muted"
+                  >
+                    {openId === a.id ? "Hide" : "View"}
+                  </button>
+                  {mode !== "accepted" && (
                     <button
-                      onClick={() => setOpenId(openId === a.id ? null : a.id)}
-                      className="rounded-full border border-border/60 px-3 py-1 text-xs hover:bg-muted"
-                    >
-                      {openId === a.id ? "Hide" : "View"}
-                    </button>
-                    <button
-                      onClick={() => statusMutation.mutate({ applicantId: a.id, status: "accepted" })}
+                      onClick={() => onStatus(a.id, "accepted")}
                       className="rounded-full bg-emerald-600 px-3 py-1 text-xs font-semibold text-white"
                     >
                       Accept
                     </button>
+                  )}
+                  {mode !== "declined" && (
                     <button
-                      onClick={() => statusMutation.mutate({ applicantId: a.id, status: "declined" })}
+                      onClick={() => onStatus(a.id, "declined")}
                       className="rounded-full bg-red-600 px-3 py-1 text-xs font-semibold text-white"
                     >
                       Decline
                     </button>
-                  </div>
-                </td>
+                  )}
+                  {mode !== "pending" && (
+                    <button
+                      onClick={() => onStatus(a.id, "pending")}
+                      className="rounded-full border border-border/60 px-3 py-1 text-xs hover:bg-muted"
+                    >
+                      Re-open
+                    </button>
+                  )}
+                </div>
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+function StaffPanel() {
+  const qc = useQueryClient();
+  const fetchStaff = useServerFn(listStaff);
+  const invite = useServerFn(inviteStaff);
+  const changeRole = useServerFn(setStaffRole);
+  const changeActive = useServerFn(setStaffActive);
+  const [email, setEmail] = useState("");
+  const [role, setRole] = useState<"admin" | "admissions_officer">("admissions_officer");
+
+  const { data: staff, isLoading, error } = useQuery({
+    queryKey: ["admin", "staff"],
+    queryFn: () => fetchStaff(),
+  });
+
+  const refresh = async () => {
+    await qc.invalidateQueries({ queryKey: ["admin", "staff"] });
+    await qc.invalidateQueries({ queryKey: ["admin", "audit"] });
+  };
+
+  const inviteMutation = useMutation({
+    mutationFn: (vars: { email: string; role: "admin" | "admissions_officer" }) => invite({ data: vars }),
+    onSuccess: async (res) => {
+      setEmail("");
+      toast.success(
+        res.emailSent
+          ? "Invitation sent — the staff member sets their own password from the emailed link."
+          : "Staff access granted. The invitation email could not be sent, so ask them to sign in or reset their password.",
+      );
+      await refresh();
+    },
+    onError: (e: unknown) => toast.error(e instanceof Error ? e.message : "Could not invite staff member."),
+  });
+
+  const roleMutation = useMutation({
+    mutationFn: (vars: { userId: string; role: "admin" | "admissions_officer" }) => changeRole({ data: vars }),
+    onSuccess: async () => { toast.success("Role updated."); await refresh(); },
+    onError: (e: unknown) => toast.error(e instanceof Error ? e.message : "Could not change role."),
+  });
+
+  const activeMutation = useMutation({
+    mutationFn: (vars: { userId: string; active: boolean }) => changeActive({ data: vars }),
+    onSuccess: async () => { toast.success("Account updated."); await refresh(); },
+    onError: (e: unknown) => toast.error(e instanceof Error ? e.message : "Could not update account."),
+  });
+
+  return (
+    <section className="rounded-2xl border border-border/60 bg-surface/80 p-5 shadow-glass backdrop-blur">
+      <h2 className="font-display text-lg font-semibold text-foreground">Staff management</h2>
+      <p className="mt-1 text-sm text-muted-foreground">
+        Invite administrators and admissions officers. Passwords are never visible or set by an administrator — invited
+        staff create their own from the activation link.
+      </p>
+
+      <form
+        className="mt-4 flex flex-wrap items-end gap-2"
+        onSubmit={(e) => {
+          e.preventDefault();
+          if (!email.trim()) return;
+          inviteMutation.mutate({ email, role });
+        }}
+      >
+        <label className="text-sm">
+          <span className="mb-1 block text-xs uppercase tracking-wide text-muted-foreground">Email</span>
+          <input
+            type="email"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            required
+            placeholder="staff@thabazi.co.za"
+            className="rounded-md border border-input bg-background px-3 py-1.5 text-sm"
+          />
+        </label>
+        <label className="text-sm">
+          <span className="mb-1 block text-xs uppercase tracking-wide text-muted-foreground">Role</span>
+          <select
+            value={role}
+            onChange={(e) => setRole(e.target.value as typeof role)}
+            className="rounded-md border border-input bg-background px-3 py-1.5 text-sm"
+          >
+            <option value="admissions_officer">Admissions officer</option>
+            <option value="admin">Administrator</option>
+          </select>
+        </label>
+        <button
+          type="submit"
+          disabled={inviteMutation.isPending}
+          className="rounded-full bg-brand px-4 py-2 text-sm font-semibold text-brand-foreground disabled:opacity-60"
+        >
+          {inviteMutation.isPending ? "Inviting…" : "Invite staff member"}
+        </button>
+      </form>
+
+      {isLoading && <p className="mt-4 text-sm text-muted-foreground">Loading staff…</p>}
+      {error && <p role="alert" className="mt-4 text-sm text-destructive">{(error as Error).message}</p>}
+
+      {staff && (
+        <div className="mt-5 overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="border-b border-border/60 text-left text-xs uppercase tracking-wide text-muted-foreground">
+                <th className="py-2 pr-4">Email</th>
+                <th className="py-2 pr-4">Role</th>
+                <th className="py-2 pr-4">Status</th>
+                <th className="py-2 pr-4">Last sign-in</th>
+                <th className="py-2">Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              {staff.map((s) => (
+                <tr key={s.userId} className="border-b border-border/40">
+                  <td className="py-3 pr-4 text-foreground">{s.email}</td>
+                  <td className="py-3 pr-4">
+                    <select
+                      value={s.role ?? "admissions_officer"}
+                      onChange={(e) =>
+                        roleMutation.mutate({ userId: s.userId, role: e.target.value as "admin" | "admissions_officer" })
+                      }
+                      className="rounded-md border border-input bg-background px-2 py-1 text-xs"
+                      aria-label={`Role for ${s.email}`}
+                    >
+                      <option value="admissions_officer">Admissions officer</option>
+                      <option value="admin">Administrator</option>
+                    </select>
+                  </td>
+                  <td className="py-3 pr-4 capitalize">{s.status}</td>
+                  <td className="py-3 pr-4">{s.lastSignInAt ? formatDate(s.lastSignInAt) : "Never"}</td>
+                  <td className="py-3">
+                    <button
+                      onClick={() => activeMutation.mutate({ userId: s.userId, active: s.status === "deactivated" })}
+                      className="rounded-full border border-border/60 px-3 py-1 text-xs hover:bg-muted"
+                    >
+                      {s.status === "deactivated" ? "Reactivate" : "Deactivate"}
+                    </button>
+                  </td>
+                </tr>
+              ))}
+              {staff.length === 0 && (
+                <tr><td colSpan={5} className="py-6 text-center text-muted-foreground">No staff accounts yet.</td></tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </section>
+  );
+}
+
+function AuditPanel() {
+  const fetchLogs = useServerFn(listAuditLogs);
+  const { data: logs, isLoading, error } = useQuery({
+    queryKey: ["admin", "audit"],
+    queryFn: () => fetchLogs(),
+  });
+
+  if (isLoading) return <p className="text-sm text-muted-foreground">Loading audit logs…</p>;
+  if (error) return <p role="alert" className="text-sm text-destructive">{(error as Error).message}</p>;
+
+  return (
+    <section className="rounded-2xl border border-border/60 bg-surface/80 p-5 shadow-glass backdrop-blur">
+      <h2 className="font-display text-lg font-semibold text-foreground">Audit logs</h2>
+      <p className="mt-1 text-sm text-muted-foreground">
+        Append-only record of administrative actions. Records cannot be edited or deleted from the dashboard.
+      </p>
+      <div className="mt-4 overflow-x-auto">
+        <table className="w-full text-sm">
+          <thead>
+            <tr className="border-b border-border/60 text-left text-xs uppercase tracking-wide text-muted-foreground">
+              <th className="py-2 pr-4">When</th>
+              <th className="py-2 pr-4">Staff user</th>
+              <th className="py-2 pr-4">Action</th>
+              <th className="py-2">Details</th>
+            </tr>
+          </thead>
+          <tbody>
+            {(logs ?? []).map((l: any) => (
+              <tr key={l.id} className="border-b border-border/40 align-top">
+                <td className="py-3 pr-4 whitespace-nowrap">{new Date(l.created_at).toLocaleString("en-ZA")}</td>
+                <td className="py-3 pr-4">{l.actor_email ?? "—"}</td>
+                <td className="py-3 pr-4 font-mono text-xs">{l.action}</td>
+                <td className="py-3">{l.description ?? "—"}</td>
               </tr>
             ))}
-            {rows.length === 0 && (
-              <tr><td colSpan={8} className="py-6 text-center text-muted-foreground">No applications found.</td></tr>
+            {(logs ?? []).length === 0 && (
+              <tr><td colSpan={4} className="py-6 text-center text-muted-foreground">No audit records yet.</td></tr>
             )}
           </tbody>
         </table>
       </div>
-
-      {openId && (() => {
-        const a = rows.find((r: any) => r.id === openId);
-        if (!a) return null;
-        return (
-          <div className="mt-6 rounded-xl border border-border/60 bg-background/60 p-5">
-            <h3 className="font-display text-base font-semibold text-foreground">
-              {a.first_name} {a.last_name} · {a.application_number}
-            </h3>
-            <dl className="mt-3 grid gap-x-6 gap-y-2 text-sm sm:grid-cols-2">
-              <Detail label="Email" value={a.email} />
-              <Detail label="Phone" value={a.phone} />
-              <Detail label="Parent / guardian" value={a.parent_name} />
-              <Detail label="Parent email" value={a.parent_email} />
-              <Detail label="Parent phone" value={a.parent_phone} />
-              <Detail label="Previous school" value={a.previous_school} />
-              <Detail label="Current grade" value={a.current_grade} />
-              <Detail label="Applying for" value={a.grade} />
-              <Detail label="Academic average" value={`${a.academic_average}%`} />
-              <Detail label="Status" value={a.application_status} />
-              <Detail
-                label="Appointment"
-                value={a.appointment ? `${a.appointment.appointment_date} at ${a.appointment.appointment_time}` : "—"}
-              />
-              <Detail label="Venue" value={a.appointment?.venue ?? "—"} />
-            </dl>
-            <div className="mt-4">
-              <h4 className="text-sm font-semibold text-foreground">Documents</h4>
-              <ul className="mt-2 flex flex-wrap gap-3 text-sm">
-                {(docs ?? []).map((d) => (
-                  <li key={d.label}>
-                    <a href={d.url} target="_blank" rel="noreferrer" className="text-brand underline">
-                      {d.label}
-                    </a>
-                  </li>
-                ))}
-                {(!docs || docs.length === 0) && <li className="text-muted-foreground">No documents available.</li>}
-              </ul>
-            </div>
-          </div>
-        );
-      })()}
     </section>
   );
 }

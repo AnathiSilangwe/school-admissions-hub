@@ -132,6 +132,60 @@ export type Database = {
           },
         ]
       }
+      audit_logs: {
+        Row: {
+          action: string
+          actor_email: string | null
+          actor_id: string | null
+          applicant_id: string | null
+          created_at: string
+          description: string | null
+          details: Json
+          grade_id: string | null
+          id: string
+          target_user_id: string | null
+        }
+        Insert: {
+          action: string
+          actor_email?: string | null
+          actor_id?: string | null
+          applicant_id?: string | null
+          created_at?: string
+          description?: string | null
+          details?: Json
+          grade_id?: string | null
+          id?: string
+          target_user_id?: string | null
+        }
+        Update: {
+          action?: string
+          actor_email?: string | null
+          actor_id?: string | null
+          applicant_id?: string | null
+          created_at?: string
+          description?: string | null
+          details?: Json
+          grade_id?: string | null
+          id?: string
+          target_user_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "audit_logs_applicant_id_fkey"
+            columns: ["applicant_id"]
+            isOneToOne: false
+            referencedRelation: "applicants"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "audit_logs_grade_id_fkey"
+            columns: ["grade_id"]
+            isOneToOne: false
+            referencedRelation: "grades"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       documents: {
         Row: {
           applicant_id: string
@@ -267,6 +321,38 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      admin_set_application_status: {
+        Args: { _applicant_id: string; _status: string }
+        Returns: {
+          academic_average: number
+          address: string
+          age: number
+          application_number: string
+          application_status: string
+          applying_grade_id: string
+          created_at: string
+          current_grade: string
+          date_of_birth: string
+          email: string
+          first_name: string
+          gender: string
+          id: string
+          id_number: string
+          last_name: string
+          parent_email: string
+          parent_name: string
+          parent_phone: string
+          parent_relationship: string
+          phone: string
+          previous_school: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "applicants"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
       admin_set_grade_capacity: {
         Args: { _capacity: number; _grade_id: string }
         Returns: {

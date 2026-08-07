@@ -90,12 +90,33 @@ export const updateApplicationStatus = createServerFn({ method: "POST" })
   )
   .handler(async ({ data, context }) => {
     await assertStaff(context);
-    const { error } = await context.supabase
-      .from("applicants")
-      .update({ application_status: data.status })
-      .eq("id", data.applicantId);
-    if (error) throw new Error(error.message);
+    // Single source of truth: seat accounting + audit trail happen inside the RPC.
+    const { error } = await context.supabase.rpc("admin_set_application_status", {
+      _applicant_id: data.applicantId,
+      _status: data.status,
+    });
+    if (error) {
+      if (error.message.includes("GRADE_FULL"))
+        throw new Error("That grade is full, so this application cannot be re-opened or accepted.");
+      if (error.message.includes("APPLICATION_NOT_FOUND")) throw new Error("That application no longer exists.");
+      if (error.message.includes("FORBIDDEN")) throw new Error("You are not allowed to change application status.");
+      throw new Error(error.message);
+    }
     return { ok: true };
+  });
+
+export const listAuditLogs = createServerFn({ method: "GET" })
+  .middleware([requireSupabaseAuth])
+  .handler(async ({ context }) => {
+    const role = await assertStaff(context);
+    if (role !== "admin") throw new Error("FORBIDDEN: audit logs are restricted to administrators.");
+    const { data, error } = await context.supabase
+      .from("audit_logs")
+      .select("id, actor_email, action, applicant_id, grade_id, description, details, created_at")
+      .order("created_at", { ascending: false })
+      .limit(300);
+    if (error) throw new Error(error.message);
+    return data ?? [];
   });
 
 export const getApplicationDocuments = createServerFn({ method: "POST" })
