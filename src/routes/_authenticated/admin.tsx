@@ -73,13 +73,24 @@ const STATUS_COLORS: Record<string, string> = {
 };
 const GENDER_COLORS = [BLUE, "hsl(330 81% 60%)", GOLD];
 
-const TABS = ["Dashboard", "Applications", "Grade Management"] as const;
+const TABS = [
+  "Dashboard",
+  "Applications",
+  "Accepted / Enrolled",
+  "Declined",
+  "Grade Management",
+  "Staff Management",
+  "Audit Logs",
+] as const;
 type Tab = (typeof TABS)[number];
 
 function AdminPage() {
   const fetcher = useServerFn(getAdminStats);
   const { data } = useSuspenseQuery(statsQueryOptions(() => fetcher()));
   const [tab, setTab] = useState<Tab>("Dashboard");
+  const { data: roleInfo } = useQuery({ queryKey: ["admin", "role"], queryFn: () => getStaffRole() });
+  const isAdmin = roleInfo?.role === "admin";
+  const visibleTabs = TABS.filter((t) => isAdmin || (t !== "Staff Management" && t !== "Audit Logs"));
 
   async function signOut() {
     await supabase.auth.signOut();
@@ -110,7 +121,7 @@ function AdminPage() {
 
       <nav className="border-b border-border/60 bg-surface/40">
         <div className="mx-auto flex max-w-7xl gap-1 overflow-x-auto px-6">
-          {TABS.map((t) => (
+          {visibleTabs.map((t) => (
             <button
               key={t}
               onClick={() => setTab(t)}
@@ -127,8 +138,12 @@ function AdminPage() {
       </nav>
 
       <div className="mx-auto max-w-7xl space-y-6 px-6 py-8">
-        {tab === "Applications" && <ApplicationsPanel />}
+        {tab === "Applications" && <ApplicationsPanel mode="pending" />}
+        {tab === "Accepted / Enrolled" && <ApplicationsPanel mode="accepted" />}
+        {tab === "Declined" && <ApplicationsPanel mode="declined" />}
         {tab === "Grade Management" && <GradesPanel />}
+        {tab === "Staff Management" && isAdmin && <StaffPanel />}
+        {tab === "Audit Logs" && isAdmin && <AuditPanel />}
         {tab === "Dashboard" && (
         <div className="space-y-6">
         {/* Summary cards */}
