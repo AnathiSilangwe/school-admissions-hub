@@ -27,6 +27,8 @@ import {
   updateApplicationStatus,
   getApplicationDocuments,
 } from "@/lib/admin.functions";
+import { listAuditLogs } from "@/lib/admin.functions";
+import { listStaff, inviteStaff, setStaffRole, setStaffActive } from "@/lib/staff.functions";
 import { supabase } from "@/integrations/supabase/client";
 import { useQueryClient, useQuery, useMutation } from "@tanstack/react-query";
 import { toast } from "sonner";
