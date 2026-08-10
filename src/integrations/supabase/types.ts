@@ -279,6 +279,7 @@ export type Database = {
           capacity: number
           grade_number: number
           id: string
+          is_active: boolean
           name: string
           occupied: number
         }
@@ -286,6 +287,7 @@ export type Database = {
           capacity: number
           grade_number: number
           id?: string
+          is_active?: boolean
           name: string
           occupied?: number
         }
@@ -293,6 +295,7 @@ export type Database = {
           capacity?: number
           grade_number?: number
           id?: string
+          is_active?: boolean
           name?: string
           occupied?: number
         }
@@ -359,6 +362,7 @@ export type Database = {
           capacity: number
           grade_number: number
           id: string
+          is_active: boolean
           name: string
           occupied: number
         }
@@ -375,6 +379,7 @@ export type Database = {
           capacity: number
           grade_number: number
           id: string
+          is_active: boolean
           name: string
           occupied: number
         }
