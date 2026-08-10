@@ -68,6 +68,9 @@ export const submitApplication = createServerFn({ method: "POST" })
 
     if (rpcErr) {
       if (rpcErr.message.includes("GRADE_FULL")) throw new Error("GRADE_FULL");
+      if (rpcErr.message.includes("GRADE_NOT_ACCEPTING") || rpcErr.message.includes("GRADE_NOT_FOUND")) {
+        throw new Error("The school is only accepting applications for Grades 8, 9 and 10.");
+      }
       if (rpcErr.message.includes("BELOW_MINIMUM_AVERAGE")) {
         throw new Error("Academic average is below the required 40% minimum.");
       }
