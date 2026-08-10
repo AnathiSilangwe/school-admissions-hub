@@ -20,7 +20,11 @@ export const getAdminStats = createServerFn({ method: "GET" })
       supabase
         .from("applicants")
         .select("id, gender, application_status, applying_grade_id, created_at"),
-      supabase.from("grades").select("id, name, grade_number, capacity, occupied").order("grade_number"),
+      supabase
+        .from("grades")
+        .select("id, name, grade_number, capacity, occupied")
+        .eq("is_active", true)
+        .order("grade_number"),
     ]);
     if (aErr) throw new Error(aErr.message);
     if (gErr) throw new Error(gErr.message);

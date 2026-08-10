@@ -60,7 +60,7 @@ function Index() {
             </div>
             <div className="grid grid-cols-3 gap-3 max-w-md pt-4">
               {[
-                { k: "Grades", v: "8–12" },
+                { k: "Grades", v: "8–10" },
                 { k: "Min average", v: "40%" },
                 { k: "App. fee", v: "R100" },
               ].map((s) => (

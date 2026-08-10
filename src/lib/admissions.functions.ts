@@ -15,6 +15,7 @@ export const getGradeAvailability = createServerFn({ method: "GET" }).handler(as
   const { data, error } = await supabase
     .from("grades")
     .select("id, grade_number, name, capacity, occupied")
+    .eq("is_active", true)
     .order("grade_number");
   if (error) throw new Error(error.message);
   return data ?? [];

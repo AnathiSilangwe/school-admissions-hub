@@ -19,7 +19,7 @@
       {
         "name": "list_grades",
         "title": "List grades and seat availability",
-        "description": "Return every grade at Thabazi Secondary School with its capacity, occupied seats, and remaining space.",
+        "description": "Return every grade currently open for admission at Thabazi Secondary School (Grades 8–10) with its capacity, occupied seats, and remaining space.",
         "annotations": {
           "readOnlyHint": true,
           "idempotentHint": true,
