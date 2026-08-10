@@ -299,7 +299,8 @@ function GradesPanel() {
     <section className="rounded-2xl border border-border/60 bg-surface/80 p-5 shadow-glass backdrop-blur">
       <h2 className="font-display text-lg font-semibold text-foreground">Grade management</h2>
       <p className="mt-1 text-sm text-muted-foreground">
-        Enrolled seats are controlled by the admissions workflow and cannot be edited directly.
+        Admissions are open for Grades 8–10 only. Enrolled seats are controlled by the admissions workflow and cannot be
+        edited directly.
       </p>
       {formError && <p role="alert" className="mt-3 text-sm text-destructive">{formError}</p>}
       <div className="mt-4 overflow-x-auto">

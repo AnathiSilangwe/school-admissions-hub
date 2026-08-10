@@ -209,7 +209,10 @@ function Apply() {
           )}
 
           {step === 3 && (
-            <Section title="Choose your grade" subtitle="Live seat availability — updated in real time.">
+            <Section
+              title="Choose your grade"
+              subtitle="Applications are open for Grades 8, 9 and 10 only. Live seat availability — updated in real time."
+            >
               {grades.isLoading && (
                 <div className="flex items-center gap-2 text-muted-foreground text-sm">
                   <Loader2 className="h-4 w-4 animate-spin" /> Loading availability…

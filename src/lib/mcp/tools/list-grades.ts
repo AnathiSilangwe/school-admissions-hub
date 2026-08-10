@@ -5,7 +5,7 @@ export default defineTool({
   name: "list_grades",
   title: "List grades and seat availability",
   description:
-    "Return every grade at Thabazi Secondary School with its capacity, occupied seats, and remaining space.",
+      "Return every grade currently open for admission at Thabazi Secondary School (Grades 8–10) with its capacity, occupied seats, and remaining space.",
   inputSchema: {},
   annotations: { readOnlyHint: true, idempotentHint: true, openWorldHint: false },
   handler: async () => {
@@ -17,6 +17,7 @@ export default defineTool({
     const { data, error } = await supabase
       .from("grades")
       .select("id, grade_number, name, capacity, occupied")
+      .eq("is_active", true)
       .order("grade_number");
     if (error) {
       return { content: [{ type: "text", text: error.message }], isError: true };
