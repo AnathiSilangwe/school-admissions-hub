@@ -28,7 +28,15 @@ import {
   getApplicationDocuments,
 } from "@/lib/admin.functions";
 import { listAuditLogs } from "@/lib/admin.functions";
-import { listStaff, inviteStaff, setStaffRole, setStaffActive } from "@/lib/staff.functions";
+import {
+  listStaff,
+  findUserByEmail,
+  authorizeStaff,
+  removeStaffRole,
+  setStaffRole,
+  setStaffActive,
+} from "@/lib/staff.functions";
+import type { StaffMember } from "@/lib/staff.functions";
 import { supabase } from "@/integrations/supabase/client";
 import { useQueryClient, useQuery, useMutation } from "@tanstack/react-query";
 import { toast } from "sonner";
@@ -81,7 +89,7 @@ const TABS = [
   "Accepted / Enrolled",
   "Declined",
   "Grade Management",
-  "Staff Management",
+  "Admin Management",
   "Audit Logs",
 ] as const;
 type Tab = (typeof TABS)[number];
@@ -92,7 +100,7 @@ function AdminPage() {
   const [tab, setTab] = useState<Tab>("Dashboard");
   const { data: roleInfo } = useQuery({ queryKey: ["admin", "role"], queryFn: () => getStaffRole() });
   const isAdmin = roleInfo?.role === "admin";
-  const visibleTabs = TABS.filter((t) => isAdmin || (t !== "Staff Management" && t !== "Audit Logs"));
+  const visibleTabs = TABS.filter((t) => isAdmin || (t !== "Admin Management" && t !== "Audit Logs"));
 
   async function signOut() {
     await supabase.auth.signOut();
@@ -144,7 +152,7 @@ function AdminPage() {
         {tab === "Accepted / Enrolled" && <ApplicationsPanel mode="accepted" />}
         {tab === "Declined" && <ApplicationsPanel mode="declined" />}
         {tab === "Grade Management" && <GradesPanel />}
-        {tab === "Staff Management" && isAdmin && <StaffPanel />}
+        {tab === "Admin Management" && isAdmin && <StaffPanel />}
         {tab === "Audit Logs" && isAdmin && <AuditPanel />}
         {tab === "Dashboard" && (
         <div className="space-y-6">
@@ -651,14 +659,22 @@ function ApplicationsTable({
   );
 }
 
+const ROLE_LABEL: Record<"admin" | "admissions_officer", string> = {
+  admin: "Administrator",
+  admissions_officer: "Admissions officer",
+};
+
 function StaffPanel() {
   const qc = useQueryClient();
   const fetchStaff = useServerFn(listStaff);
-  const invite = useServerFn(inviteStaff);
+  const findUser = useServerFn(findUserByEmail);
+  const authorize = useServerFn(authorizeStaff);
+  const removeRole = useServerFn(removeStaffRole);
   const changeRole = useServerFn(setStaffRole);
   const changeActive = useServerFn(setStaffActive);
   const [email, setEmail] = useState("");
   const [role, setRole] = useState<"admin" | "admissions_officer">("admissions_officer");
+  const [found, setFound] = useState<StaffMember | null>(null);
 
   const { data: staff, isLoading, error } = useQuery({
     queryKey: ["admin", "staff"],
@@ -670,18 +686,33 @@ function StaffPanel() {
     await qc.invalidateQueries({ queryKey: ["admin", "audit"] });
   };
 
-  const inviteMutation = useMutation({
-    mutationFn: (vars: { email: string; role: "admin" | "admissions_officer" }) => invite({ data: vars }),
-    onSuccess: async (res) => {
+  const searchMutation = useMutation({
+    mutationFn: (vars: { email: string }) => findUser({ data: vars }),
+    onSuccess: (res) => {
+      setFound(res);
+      setRole(res.role ?? "admissions_officer");
+    },
+    onError: (e: unknown) => {
+      setFound(null);
+      toast.error(e instanceof Error ? e.message : "User not found. Ask the staff member to create an account first.");
+    },
+  });
+
+  const authorizeMutation = useMutation({
+    mutationFn: (vars: { userId: string; role: "admin" | "admissions_officer" }) => authorize({ data: vars }),
+    onSuccess: async () => {
+      toast.success("Staff member authorized successfully.");
+      setFound(null);
       setEmail("");
-      toast.success(
-        res.emailSent
-          ? "Invitation sent — the staff member sets their own password from the emailed link."
-          : "Staff access granted. The invitation email could not be sent, so ask them to sign in or reset their password.",
-      );
       await refresh();
     },
-    onError: (e: unknown) => toast.error(e instanceof Error ? e.message : "Could not invite staff member."),
+    onError: (e: unknown) => toast.error(e instanceof Error ? e.message : "Could not authorize this user."),
+  });
+
+  const removeMutation = useMutation({
+    mutationFn: (vars: { userId: string }) => removeRole({ data: vars }),
+    onSuccess: async () => { toast.success("Staff access removed."); await refresh(); },
+    onError: (e: unknown) => toast.error(e instanceof Error ? e.message : "Could not remove staff access."),
   });
 
   const roleMutation = useMutation({
@@ -698,10 +729,12 @@ function StaffPanel() {
 
   return (
     <section className="rounded-2xl border border-border/60 bg-surface/80 p-5 shadow-glass backdrop-blur">
-      <h2 className="font-display text-lg font-semibold text-foreground">Staff management</h2>
-      <p className="mt-1 text-sm text-muted-foreground">
-        Invite administrators and admissions officers. Passwords are never visible or set by an administrator — invited
-        staff create their own from the activation link.
+      <h2 className="font-display text-lg font-semibold text-foreground">Admin management</h2>
+      <p className="mt-1 max-w-3xl text-sm text-muted-foreground">
+        To add a new staff member, the staff member must first create an account using the school admissions login
+        page. Once the account has been created, an administrator can search for their registered email address and
+        assign the appropriate role. No invitation email is sent, and passwords are never seen or set by an
+        administrator.
       </p>
 
       <form
@@ -709,39 +742,61 @@ function StaffPanel() {
         onSubmit={(e) => {
           e.preventDefault();
           if (!email.trim()) return;
-          inviteMutation.mutate({ email, role });
+          searchMutation.mutate({ email: email.trim() });
         }}
       >
         <label className="text-sm">
-          <span className="mb-1 block text-xs uppercase tracking-wide text-muted-foreground">Email</span>
+          <span className="mb-1 block text-xs uppercase tracking-wide text-muted-foreground">Registered email</span>
           <input
             type="email"
             value={email}
-            onChange={(e) => setEmail(e.target.value)}
+            onChange={(e) => { setEmail(e.target.value); setFound(null); }}
             required
             placeholder="staff@thabazi.co.za"
             className="rounded-md border border-input bg-background px-3 py-1.5 text-sm"
           />
         </label>
-        <label className="text-sm">
-          <span className="mb-1 block text-xs uppercase tracking-wide text-muted-foreground">Role</span>
-          <select
-            value={role}
-            onChange={(e) => setRole(e.target.value as typeof role)}
-            className="rounded-md border border-input bg-background px-3 py-1.5 text-sm"
-          >
-            <option value="admissions_officer">Admissions officer</option>
-            <option value="admin">Administrator</option>
-          </select>
-        </label>
         <button
           type="submit"
-          disabled={inviteMutation.isPending}
-          className="rounded-full bg-brand px-4 py-2 text-sm font-semibold text-brand-foreground disabled:opacity-60"
+          disabled={searchMutation.isPending}
+          className="rounded-full border border-border/60 px-4 py-2 text-sm font-semibold hover:bg-muted disabled:opacity-60"
         >
-          {inviteMutation.isPending ? "Inviting…" : "Invite staff member"}
+          {searchMutation.isPending ? "Searching…" : "Search user"}
         </button>
       </form>
+
+      {found && (
+        <div className="mt-4 flex flex-wrap items-end gap-3 rounded-xl border border-border/60 bg-background/60 p-4">
+          <div className="text-sm">
+            <p className="font-medium text-foreground">{found.email}</p>
+            <p className="text-xs text-muted-foreground">
+              Current role: {found.role ? ROLE_LABEL[found.role] : "No role (normal account)"} · {found.status}
+            </p>
+          </div>
+          <label className="text-sm">
+            <span className="mb-1 block text-xs uppercase tracking-wide text-muted-foreground">Assign role</span>
+            <select
+              value={role}
+              onChange={(e) => setRole(e.target.value as typeof role)}
+              className="rounded-md border border-input bg-background px-3 py-1.5 text-sm"
+            >
+              <option value="admissions_officer">Admissions officer</option>
+              <option value="admin">Administrator</option>
+            </select>
+          </label>
+          <button
+            type="button"
+            disabled={authorizeMutation.isPending}
+            onClick={() => {
+              if (!window.confirm(`Give ${found.email} the ${ROLE_LABEL[role]} role?`)) return;
+              authorizeMutation.mutate({ userId: found.userId, role });
+            }}
+            className="rounded-full bg-brand px-4 py-2 text-sm font-semibold text-brand-foreground disabled:opacity-60"
+          >
+            {authorizeMutation.isPending ? "Authorizing…" : "Authorize"}
+          </button>
+        </div>
+      )}
 
       {isLoading && <p className="mt-4 text-sm text-muted-foreground">Loading staff…</p>}
       {error && <p role="alert" className="mt-4 text-sm text-destructive">{(error as Error).message}</p>}
@@ -765,9 +820,11 @@ function StaffPanel() {
                   <td className="py-3 pr-4">
                     <select
                       value={s.role ?? "admissions_officer"}
-                      onChange={(e) =>
-                        roleMutation.mutate({ userId: s.userId, role: e.target.value as "admin" | "admissions_officer" })
-                      }
+                      onChange={(e) => {
+                        const next = e.target.value as "admin" | "admissions_officer";
+                        if (!window.confirm(`Change ${s.email} to ${ROLE_LABEL[next]}?`)) return;
+                        roleMutation.mutate({ userId: s.userId, role: next });
+                      }}
                       className="rounded-md border border-input bg-background px-2 py-1 text-xs"
                       aria-label={`Role for ${s.email}`}
                     >
@@ -778,12 +835,24 @@ function StaffPanel() {
                   <td className="py-3 pr-4 capitalize">{s.status}</td>
                   <td className="py-3 pr-4">{s.lastSignInAt ? formatDate(s.lastSignInAt) : "Never"}</td>
                   <td className="py-3">
-                    <button
-                      onClick={() => activeMutation.mutate({ userId: s.userId, active: s.status === "deactivated" })}
-                      className="rounded-full border border-border/60 px-3 py-1 text-xs hover:bg-muted"
-                    >
-                      {s.status === "deactivated" ? "Reactivate" : "Deactivate"}
-                    </button>
+                    <div className="flex flex-wrap gap-2">
+                      <button
+                        onClick={() => activeMutation.mutate({ userId: s.userId, active: s.status === "deactivated" })}
+                        className="rounded-full border border-border/60 px-3 py-1 text-xs hover:bg-muted"
+                      >
+                        {s.status === "deactivated" ? "Reactivate" : "Deactivate"}
+                      </button>
+                      <button
+                        onClick={() => {
+                          if (!window.confirm(`Remove staff access for ${s.email}? Their login account stays active.`))
+                            return;
+                          removeMutation.mutate({ userId: s.userId });
+                        }}
+                        className="rounded-full border border-destructive/50 px-3 py-1 text-xs text-destructive hover:bg-destructive/10"
+                      >
+                        Remove role
+                      </button>
+                    </div>
                   </td>
                 </tr>
               ))}
