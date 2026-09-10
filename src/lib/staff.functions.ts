@@ -73,41 +73,73 @@ async function writeAudit(
   });
 }
 
-export const inviteStaff = createServerFn({ method: "POST" })
+export const findUserByEmail = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((input: { email: string; role: "admin" | "admissions_officer" }) =>
-    z.object({ email: z.string().email(), role: z.enum(["admin", "admissions_officer"]) }).parse(input),
-  )
+  .inputValidator((input: { email: string }) => z.object({ email: z.string().email() }).parse(input))
   .handler(async ({ data, context }) => {
-    const actor = await assertAdmin(context);
+    await assertAdmin(context);
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     const email = data.email.trim().toLowerCase();
 
-    // Invitation flow: the invitee receives an activation link and sets their own password.
-    const { data: invited, error: inviteErr } = await supabaseAdmin.auth.admin.inviteUserByEmail(email);
-    let userId = invited?.user?.id ?? null;
-    let emailSent = !inviteErr;
+    const { data: list, error } = await supabaseAdmin.auth.admin.listUsers({ page: 1, perPage: 1000 });
+    if (error) throw new Error(error.message);
+    const user = list.users.find((u) => u.email?.toLowerCase() === email);
+    if (!user) throw new Error("User not found. Ask the staff member to create an account first.");
 
-    if (inviteErr) {
-      // Already registered (or mail delivery unavailable) - fall back to attaching the role.
-      const { data: list } = await supabaseAdmin.auth.admin.listUsers({ page: 1, perPage: 200 });
-      userId = list?.users.find((u) => u.email?.toLowerCase() === email)?.id ?? null;
-      emailSent = false;
-      if (!userId) throw new Error(`Could not invite ${email}: ${inviteErr.message}`);
-    }
+    const { data: roles } = await supabaseAdmin.from("user_roles").select("role").eq("user_id", user.id);
+    const banned = (user as any).banned_until && new Date((user as any).banned_until) > new Date();
+    return {
+      userId: user.id,
+      email: user.email ?? email,
+      role: (roles?.[0]?.role ?? null) as "admin" | "admissions_officer" | null,
+      status: banned ? "deactivated" : user.last_sign_in_at ? "active" : "invited",
+      createdAt: user.created_at ?? "",
+      lastSignInAt: user.last_sign_in_at ?? null,
+    } satisfies StaffMember;
+  });
 
-    const { error: roleErr } = await supabaseAdmin
-      .from("user_roles")
-      .upsert({ user_id: userId!, role: data.role }, { onConflict: "user_id,role" });
-    if (roleErr) throw new Error(roleErr.message);
+/** Grants (or changes) a staff role for an already-registered account. No email is sent. */
+export const authorizeStaff = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((input: { userId: string; role: "admin" | "admissions_officer" }) =>
+    z.object({ userId: z.string().uuid(), role: z.enum(["admin", "admissions_officer"]) }).parse(input),
+  )
+  .handler(async ({ data, context }) => {
+    const actor = await assertAdmin(context);
+    if (data.userId === actor.userId) throw new Error("You cannot change your own role.");
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
 
-    await writeAudit(supabaseAdmin, actor, "staff_invited", userId, `Invited ${email} as ${data.role}`, {
-      email,
-      role: data.role,
-      invitation_email_sent: emailSent,
-    });
+    const { data: list, error: listErr } = await supabaseAdmin.auth.admin.getUserById(data.userId);
+    if (listErr || !list?.user) throw new Error("User not found. Ask the staff member to create an account first.");
 
-    return { ok: true, emailSent, userId };
+    const { error: delErr } = await supabaseAdmin.from("user_roles").delete().eq("user_id", data.userId);
+    if (delErr) throw new Error(delErr.message);
+    const { error } = await supabaseAdmin.from("user_roles").insert({ user_id: data.userId, role: data.role });
+    if (error) throw new Error(error.message);
+
+    await writeAudit(
+      supabaseAdmin,
+      actor,
+      "staff_authorized",
+      data.userId,
+      `Authorized ${list.user.email} as ${data.role}`,
+      { email: list.user.email, role: data.role },
+    );
+    return { ok: true, email: list.user.email ?? null };
+  });
+
+/** Removes all staff roles. The person keeps their normal login account. */
+export const removeStaffRole = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((input: { userId: string }) => z.object({ userId: z.string().uuid() }).parse(input))
+  .handler(async ({ data, context }) => {
+    const actor = await assertAdmin(context);
+    if (data.userId === actor.userId) throw new Error("You cannot remove your own administrator role.");
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const { error } = await supabaseAdmin.from("user_roles").delete().eq("user_id", data.userId);
+    if (error) throw new Error(error.message);
+    await writeAudit(supabaseAdmin, actor, "staff_role_removed", data.userId, "Staff access removed", {});
+    return { ok: true };
   });
 
 export const setStaffRole = createServerFn({ method: "POST" })
