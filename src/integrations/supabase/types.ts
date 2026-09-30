@@ -324,6 +324,23 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      admin_adjust_grade_enrollment: {
+        Args: { _grade_id: string; _occupied: number }
+        Returns: {
+          capacity: number
+          grade_number: number
+          id: string
+          is_active: boolean
+          name: string
+          occupied: number
+        }
+        SetofOptions: {
+          from: "*"
+          to: "grades"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
       admin_set_application_status: {
         Args: { _applicant_id: string; _status: string }
         Returns: {
@@ -358,23 +375,6 @@ export type Database = {
       }
       admin_set_grade_capacity: {
         Args: { _capacity: number; _grade_id: string }
-        Returns: {
-          capacity: number
-          grade_number: number
-          id: string
-          is_active: boolean
-          name: string
-          occupied: number
-        }
-        SetofOptions: {
-          from: "*"
-          to: "grades"
-          isOneToOne: true
-          isSetofReturn: false
-        }
-      }
-      claim_grade_seat: {
-        Args: { _grade_id: string }
         Returns: {
           capacity: number
           grade_number: number
