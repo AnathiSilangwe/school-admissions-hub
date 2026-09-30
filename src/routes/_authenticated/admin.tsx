@@ -23,6 +23,7 @@ import {
   getStaffRole,
   listGrades,
   setGradeCapacity,
+  setGradeEnrollment,
   listApplications,
   updateApplicationStatus,
   getApplicationDocuments,
