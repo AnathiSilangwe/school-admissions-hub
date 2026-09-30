@@ -152,20 +152,44 @@ function AdminPage() {
         {tab === "Applications" && <ApplicationsPanel mode="pending" />}
         {tab === "Accepted / Enrolled" && <ApplicationsPanel mode="accepted" />}
         {tab === "Declined" && <ApplicationsPanel mode="declined" />}
-        {tab === "Grade Management" && <GradesPanel />}
+        {tab === "Grade Management" && <GradesPanel isAdmin={isAdmin} />}
         {tab === "Admin Management" && isAdmin && <StaffPanel />}
         {tab === "Audit Logs" && isAdmin && <AuditPanel />}
         {tab === "Dashboard" && (
         <div className="space-y-6">
         {/* Summary cards */}
         <section className="grid grid-cols-2 gap-4 md:grid-cols-3 lg:grid-cols-6">
-          <SummaryCard label="Total" value={data.totals.total} accent="text-foreground" />
-          <SummaryCard label="Accepted" value={data.totals.accepted} accent="text-emerald-600" />
+          <SummaryCard label="Total applications" value={data.totals.total} accent="text-foreground" />
+          <SummaryCard label="Accepted / enrolled" value={data.totals.accepted} accent="text-emerald-600" />
           <SummaryCard label="Declined" value={data.totals.declined} accent="text-red-600" />
-          <SummaryCard label="Pending" value={data.totals.pending} accent="text-amber-600" />
+          <SummaryCard label="Pending applications" value={data.totals.pending} accent="text-amber-600" />
           <SummaryCard label="Waitlist" value={data.totals.waitlist} accent="text-slate-600" />
           <SummaryCard label="Available seats" value={data.capacity.available} accent="text-brand" />
         </section>
+
+        <section className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          {data.byGrade.map((g) => (
+            <div
+              key={g.grade}
+              className="rounded-2xl border border-border/60 bg-surface/80 p-5 shadow-glass backdrop-blur"
+            >
+              <h3 className="font-display text-base font-semibold text-foreground">{g.grade}</h3>
+              <dl className="mt-3 space-y-1.5 text-sm">
+                <GradeStat label="Capacity" value={g.capacity} />
+                <GradeStat label="Accepted / enrolled" value={g.occupied} />
+                <GradeStat label="Available seats" value={Math.max(g.capacity - g.occupied, 0)} />
+                <GradeStat label="Pending applications" value={g.pending} />
+              </dl>
+              {g.accepted !== g.occupied && (
+                <p role="alert" className="mt-3 text-xs text-destructive">
+                  Mismatch: {g.accepted} accepted learner{g.accepted === 1 ? "" : "s"} recorded, but the enrolled count
+                  is {g.occupied}.
+                </p>
+              )}
+            </div>
+          ))}
+        </section>
+
 
         {/* Charts */}
         <div className="grid gap-6 lg:grid-cols-2">
