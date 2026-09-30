@@ -55,6 +55,29 @@ export const setGradeCapacity = createServerFn({ method: "POST" })
     return row as { id: string; name: string; capacity: number; occupied: number };
   });
 
+export const setGradeEnrollment = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((input: { gradeId: string; occupied: number }) =>
+    z.object({ gradeId: z.string().uuid(), occupied: z.number().int().min(0).max(10000) }).parse(input),
+  )
+  .handler(async ({ data, context }) => {
+    const role = await assertStaff(context);
+    if (role !== "admin") throw new Error("Only administrators can adjust the enrolled count.");
+    const { data: row, error } = await context.supabase.rpc("admin_adjust_grade_enrollment", {
+      _grade_id: data.gradeId,
+      _occupied: data.occupied,
+    });
+    if (error) {
+      if (error.message.includes("ENROLLMENT_ABOVE_CAPACITY"))
+        throw new Error("The enrolled count cannot be higher than the grade's capacity.");
+      if (error.message.includes("INVALID_ENROLLMENT")) throw new Error("The enrolled count must be zero or greater.");
+      if (error.message.includes("GRADE_NOT_FOUND")) throw new Error("That grade no longer exists.");
+      if (error.message.includes("FORBIDDEN")) throw new Error("Only administrators can adjust the enrolled count.");
+      throw new Error(error.message);
+    }
+    return row as { id: string; name: string; capacity: number; occupied: number };
+  });
+
 export const listApplications = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
   .handler(async ({ context }) => {
