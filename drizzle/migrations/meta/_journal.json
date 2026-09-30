@@ -1,0 +1,13 @@
+{
+  "version": "7",
+  "dialect": "postgresql",
+  "entries": [
+    {
+      "idx": 0,
+      "version": "7",
+      "when": 1790793096517,
+      "tag": "0000_correct_enrollment_seat_logic",
+      "breakpoints": true
+    }
+  ]
+}
