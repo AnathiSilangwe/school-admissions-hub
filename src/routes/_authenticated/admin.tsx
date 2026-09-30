@@ -288,17 +288,35 @@ function AdminPage() {
   );
 }
 
-function GradesPanel() {
+function GradeStat({ label, value }: { label: string; value: number }) {
+  return (
+    <div className="flex items-center justify-between">
+      <dt className="text-muted-foreground">{label}</dt>
+      <dd className="font-semibold text-foreground">{value}</dd>
+    </div>
+  );
+}
+
+function GradesPanel({ isAdmin }: { isAdmin: boolean }) {
   const qc = useQueryClient();
   const fetchGrades = useServerFn(listGrades);
   const saveCapacity = useServerFn(setGradeCapacity);
+  const saveEnrollment = useServerFn(setGradeEnrollment);
   const { data: grades, isLoading, error } = useQuery({
     queryKey: ["admin", "grades"],
     queryFn: () => fetchGrades(),
   });
   const [editing, setEditing] = useState<string | null>(null);
   const [value, setValue] = useState("");
+  const [enrollEditing, setEnrollEditing] = useState<string | null>(null);
+  const [enrollValue, setEnrollValue] = useState("");
   const [formError, setFormError] = useState<string | null>(null);
+
+  async function refresh() {
+    await qc.invalidateQueries({ queryKey: ["admin", "grades"] });
+    await qc.invalidateQueries({ queryKey: ["admin", "stats"] });
+    await qc.invalidateQueries({ queryKey: ["admin", "audit"] });
+  }
 
   const mutation = useMutation({
     mutationFn: (vars: { gradeId: string; capacity: number }) => saveCapacity({ data: vars }),
@@ -306,10 +324,20 @@ function GradesPanel() {
       setEditing(null);
       setFormError(null);
       toast.success(`${row.name} capacity updated to ${row.capacity}.`);
-      await qc.invalidateQueries({ queryKey: ["admin", "grades"] });
-      await qc.invalidateQueries({ queryKey: ["admin", "stats"] });
+      await refresh();
     },
     onError: (e: unknown) => setFormError(e instanceof Error ? e.message : "Could not update capacity."),
+  });
+
+  const enrollMutation = useMutation({
+    mutationFn: (vars: { gradeId: string; occupied: number }) => saveEnrollment({ data: vars }),
+    onSuccess: async (row) => {
+      setEnrollEditing(null);
+      setFormError(null);
+      toast.success(`${row.name} enrolled count set to ${row.occupied}.`);
+      await refresh();
+    },
+    onError: (e: unknown) => setFormError(e instanceof Error ? e.message : "Could not adjust the enrolled count."),
   });
 
   function submit(gradeId: string, occupied: number) {
@@ -325,6 +353,23 @@ function GradesPanel() {
     mutation.mutate({ gradeId, capacity });
   }
 
+  function submitEnrollment(grade: { id: string; name: string; capacity: number; occupied: number }) {
+    const occupied = Number(enrollValue);
+    if (!Number.isInteger(occupied) || occupied < 0) {
+      setFormError("The enrolled count must be a whole number of zero or more.");
+      return;
+    }
+    if (occupied > grade.capacity) {
+      setFormError(`The enrolled count cannot be higher than the capacity of ${grade.capacity}.`);
+      return;
+    }
+    const ok = window.confirm(
+      `Change the enrolled count for ${grade.name} from ${grade.occupied} to ${occupied}? This is recorded in the audit log.`,
+    );
+    if (!ok) return;
+    enrollMutation.mutate({ gradeId: grade.id, occupied });
+  }
+
   if (isLoading) return <p className="text-sm text-muted-foreground">Loading grades…</p>;
   if (error) return <p role="alert" className="text-sm text-destructive">{(error as Error).message}</p>;
 
@@ -332,8 +377,8 @@ function GradesPanel() {
     <section className="rounded-2xl border border-border/60 bg-surface/80 p-5 shadow-glass backdrop-blur">
       <h2 className="font-display text-lg font-semibold text-foreground">Grade management</h2>
       <p className="mt-1 text-sm text-muted-foreground">
-        Admissions are open for Grades 8–10 only. Enrolled seats are controlled by the admissions workflow and cannot be
-        edited directly.
+        Admissions are open for Grades 8–10 only. Enrolled seats change only when staff accept or reverse an
+        application{isAdmin ? ", or when an administrator records a manual correction below." : "."}
       </p>
       {formError && <p role="alert" className="mt-3 text-sm text-destructive">{formError}</p>}
       <div className="mt-4 overflow-x-auto">
@@ -342,7 +387,7 @@ function GradesPanel() {
             <tr className="border-b border-border/60 text-left text-xs uppercase tracking-wide text-muted-foreground">
               <th className="py-2 pr-4">Grade</th>
               <th className="py-2 pr-4">Capacity</th>
-              <th className="py-2 pr-4">Enrolled</th>
+              <th className="py-2 pr-4">Enrolled / accepted</th>
               <th className="py-2 pr-4">Available seats</th>
               <th className="py-2">Action</th>
             </tr>
@@ -365,7 +410,21 @@ function GradesPanel() {
                     g.capacity
                   )}
                 </td>
-                <td className="py-3 pr-4">{g.occupied}</td>
+                <td className="py-3 pr-4">
+                  {enrollEditing === g.id ? (
+                    <input
+                      type="number"
+                      min={0}
+                      max={g.capacity}
+                      value={enrollValue}
+                      onChange={(e) => setEnrollValue(e.target.value)}
+                      className="w-24 rounded-md border border-input bg-background px-2 py-1"
+                      aria-label={`Enrolled count for ${g.name}`}
+                    />
+                  ) : (
+                    g.occupied
+                  )}
+                </td>
                 <td className="py-3 pr-4">{Math.max(g.capacity - g.occupied, 0)}</td>
                 <td className="py-3">
                   {editing === g.id ? (
@@ -384,13 +443,39 @@ function GradesPanel() {
                         Cancel
                       </button>
                     </span>
+                  ) : enrollEditing === g.id ? (
+                    <span className="flex gap-2">
+                      <button
+                        onClick={() => submitEnrollment(g)}
+                        disabled={enrollMutation.isPending}
+                        className="rounded-full bg-brand px-3 py-1 text-xs font-semibold text-brand-foreground disabled:opacity-60"
+                      >
+                        Save enrolled
+                      </button>
+                      <button
+                        onClick={() => { setEnrollEditing(null); setFormError(null); }}
+                        className="rounded-full border border-border/60 px-3 py-1 text-xs"
+                      >
+                        Cancel
+                      </button>
+                    </span>
                   ) : (
-                    <button
-                      onClick={() => { setEditing(g.id); setValue(String(g.capacity)); setFormError(null); }}
-                      className="rounded-full border border-border/60 px-3 py-1 text-xs font-medium hover:bg-muted"
-                    >
-                      Edit
-                    </button>
+                    <span className="flex flex-wrap gap-2">
+                      <button
+                        onClick={() => { setEnrollEditing(null); setEditing(g.id); setValue(String(g.capacity)); setFormError(null); }}
+                        className="rounded-full border border-border/60 px-3 py-1 text-xs font-medium hover:bg-muted"
+                      >
+                        Edit capacity
+                      </button>
+                      {isAdmin && (
+                        <button
+                          onClick={() => { setEditing(null); setEnrollEditing(g.id); setEnrollValue(String(g.occupied)); setFormError(null); }}
+                          className="rounded-full border border-border/60 px-3 py-1 text-xs font-medium hover:bg-muted"
+                        >
+                          Adjust enrolled count
+                        </button>
+                      )}
+                    </span>
                   )}
                 </td>
               </tr>
@@ -401,6 +486,7 @@ function GradesPanel() {
     </section>
   );
 }
+
 
 type AppMode = "pending" | "accepted" | "declined";
 
