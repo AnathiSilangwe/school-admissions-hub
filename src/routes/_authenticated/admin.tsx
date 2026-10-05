@@ -63,7 +63,7 @@ export const Route = createFileRoute("/_authenticated/admin")({
   component: AdminPage,
   errorComponent: ({ error }) => (
     <div role="alert" className="p-8 text-sm text-destructive">
-      {error.message}
+      {error instanceof Error ? error.message : String(error)}
     </div>
   ),
   notFoundComponent: () => <div className="p-8">Not found.</div>,
