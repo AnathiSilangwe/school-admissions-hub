@@ -127,4 +127,5 @@ Confirmation Email
 School Admin Reviews Application
    ↓
 Accept / Decline
+<img width="1896" height="871" alt="image" src="https://github.com/user-attachments/assets/e48b51ac-c615-417f-b6b0-3433dd031e33" />
 
